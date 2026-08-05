@@ -55,7 +55,7 @@ export function AuthForm({ mode, oauthProviders, oauthErrorCode }: AuthFormProps
     <main className="flex-1 flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <Link href="/dashboard" className="block text-center text-lg font-semibold mb-8">
-          <Logo size={22} />
+          <Logo size={22} tone="brand" />
         </Link>
         <div className="rounded-2xl border border-line bg-panel p-8">
           <h1 className="text-xl font-semibold mb-1">

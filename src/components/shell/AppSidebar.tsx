@@ -11,7 +11,7 @@ interface AppSidebarProps {
   projects: { id: string; name: string }[];
   activeProjectId?: string | null;
   // Which top-level nav item is active
-  activeNav?: "home" | "apps";
+  activeNav?: "home" | "apps" | "discover";
   onOpenSettings: () => void;
   onLogout: () => void;
 }
@@ -45,6 +45,15 @@ function itemClass(active: boolean, collapsed: boolean): string {
   return active
     ? `${ITEM_BASE} ${layout} bg-panel-2 font-medium`
     : `${ITEM_BASE} ${layout}`;
+}
+
+function CompassIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m15.5 8.5-2 5-5 2 2-5z" />
+    </svg>
+  );
 }
 
 function HouseIcon() {
@@ -153,6 +162,14 @@ export function AppSidebar({
         >
           <GridIcon />
           {!collapsed && t("shell.myApps")}
+        </Link>
+        <Link
+          href="/discover"
+          title={collapsed ? t("discover.nav") : undefined}
+          className={itemClass(activeNav === "discover", collapsed)}
+        >
+          <CompassIcon />
+          {!collapsed && t("discover.nav")}
         </Link>
       </nav>
 

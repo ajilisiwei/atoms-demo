@@ -56,6 +56,12 @@ model Project {
   themeName          String?
   // Built-in agent persona id (see src/lib/agents.ts); null = default builder
   agentId            String?
+  // Set when this project was remixed from a published project
+  remixedFromId      String?
+  remixedFrom        Project?     @relation("Remixes", fields: [remixedFromId], references: [id], onDelete: SetNull)
+  remixes            Project[]    @relation("Remixes")
+  // Denormalized count of remixes made from this project
+  remixCount         Int          @default(0)
   // Set when the project is published; used as the public URL path /p/[slug]
   slug               String?      @unique
   publishedVersionId String?      @unique

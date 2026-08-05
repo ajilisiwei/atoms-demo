@@ -13,6 +13,7 @@ import { shellDict } from "./dict/shell";
 import { dashboardDict } from "./dict/dashboard";
 import { builderDict } from "./dict/builder";
 import { agentsDict } from "./dict/agents";
+import { discoverDict } from "./dict/discover";
 
 export type Locale = "en" | "zh";
 
@@ -31,6 +32,7 @@ const DICTIONARY: Record<string, DictEntry> = {
   ...dashboardDict,
   ...builderDict,
   ...agentsDict,
+  ...discoverDict,
 };
 
 interface LanguageContextValue {

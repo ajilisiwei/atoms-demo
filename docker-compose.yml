@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: atoms-demo-db
+    environment:
+      POSTGRES_USER: atoms
+      POSTGRES_PASSWORD: atoms_dev_password
+      POSTGRES_DB: atoms
+    ports:
+      - "54329:5432"
+    volumes:
+      - atoms_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atoms"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  atoms_db_data:

@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  projects     Project[]
+  createdAt    DateTime  @default(now())
+}
+
+model Project {
+  id                 String       @id @default(cuid())
+  userId             String
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  // Set when the project is published; used as the public URL path /p/[slug]
+  slug               String?      @unique
+  publishedVersionId String?      @unique
+  publishedVersion   AppVersion?  @relation("PublishedVersion", fields: [publishedVersionId], references: [id], onDelete: SetNull)
+  messages           Message[]
+  versions           AppVersion[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  role      String // "user" | "assistant"
+  content   String
+  // Agent plan steps captured for assistant messages, rendered as the timeline
+  planSteps Json?
+  createdAt DateTime @default(now())
+}
+
+model AppVersion {
+  id            String   @id @default(cuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  number        Int
+  html          String
+  promptSummary String
+  createdAt     DateTime @default(now())
+  publishedFor  Project? @relation("PublishedVersion")
+
+  @@unique([projectId, number])
+}

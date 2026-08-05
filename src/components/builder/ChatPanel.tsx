@@ -1,0 +1,166 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import type { GenerationState, UiMessage } from "./types";
+
+interface ChatPanelProps {
+  messages: UiMessage[];
+  generation: GenerationState | null;
+  error: string | null;
+  initialInput: string;
+  onSend: (prompt: string) => void;
+  onDismissError: () => void;
+}
+
+function PlanTimeline({ steps, live }: { steps: string[]; live: boolean }) {
+  if (steps.length === 0) return null;
+  return (
+    <ol className="mt-2 flex flex-col gap-1.5">
+      {steps.map((step, i) => {
+        const isCurrent = live && i === steps.length - 1;
+        return (
+          <li key={i} className="flex items-start gap-2 text-sm">
+            <span
+              className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
+                isCurrent ? "bg-accent animate-blink" : "bg-emerald-500"
+              }`}
+            />
+            <span className={isCurrent ? "text-foreground" : "text-muted"}>{step}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+export function ChatPanel({
+  messages,
+  generation,
+  error,
+  initialInput,
+  onSend,
+  onDismissError,
+}: ChatPanelProps) {
+  const [input, setInput] = useState(initialInput);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const generating = generation !== null;
+
+  useEffect(() => {
+    setInput(initialInput);
+  }, [initialInput]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, generation?.planSteps.length, generation?.phase]);
+
+  function submit() {
+    const value = input.trim();
+    if (!value || generating) return;
+    setInput("");
+    onSend(value);
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+        {messages.length === 0 && !generating && (
+          <div className="m-auto text-center text-muted max-w-xs">
+            <p className="text-3xl mb-3">🤖</p>
+            <p className="text-sm leading-relaxed">
+              Describe the app you want and the agent will plan it, write the
+              code and render it live on the right.
+            </p>
+          </div>
+        )}
+
+        {messages.map((m) =>
+          m.role === "user" ? (
+            <div key={m.id} className="self-end max-w-[85%]">
+              <div className="rounded-2xl rounded-br-md bg-gradient-to-r from-accent/90 to-accent-2/90 px-4 py-2.5 text-sm text-white whitespace-pre-wrap">
+                {m.content}
+              </div>
+            </div>
+          ) : (
+            <div key={m.id} className="self-start max-w-[92%] w-full">
+              <div className="rounded-2xl rounded-bl-md bg-panel-2 border border-line px-4 py-3">
+                <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                {m.planSteps && m.planSteps.length > 0 && (
+                  <details className="mt-2">
+                    <summary className="text-xs text-muted cursor-pointer select-none hover:text-foreground">
+                      Build plan ({m.planSteps.length} steps)
+                    </summary>
+                    <PlanTimeline steps={m.planSteps} live={false} />
+                  </details>
+                )}
+              </div>
+            </div>
+          )
+        )}
+
+        {generation && (
+          <div className="self-start max-w-[92%] w-full">
+            <div className="rounded-2xl rounded-bl-md bg-panel-2 border border-accent/40 px-4 py-3">
+              <p className="text-sm font-medium flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-accent animate-blink" />
+                {generation.phase === "planning" && "Planning the app…"}
+                {generation.phase === "coding" &&
+                  `Writing code… ${(generation.htmlLength / 1024).toFixed(1)} KB`}
+                {generation.phase === "finishing" && "Finishing up…"}
+              </p>
+              <PlanTimeline
+                steps={generation.planSteps}
+                live={generation.phase === "planning"}
+              />
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="self-stretch rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300 flex items-start justify-between gap-3">
+            <span>{error}</span>
+            <button onClick={onDismissError} className="shrink-0 hover:text-red-100">
+              ✕
+            </button>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="border-t border-line p-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          className="flex items-end gap-2 rounded-xl bg-panel-2 border border-line p-2 focus-within:border-accent/60 transition-colors"
+        >
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            rows={2}
+            disabled={generating}
+            placeholder={
+              messages.length === 0
+                ? "Describe your app… (Enter to send)"
+                : "Describe a change… (Enter to send)"
+            }
+            className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={generating || !input.trim()}
+            className="rounded-lg bg-gradient-to-r from-accent to-accent-2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-40"
+          >
+            {generating ? "Building…" : "Send"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

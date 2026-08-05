@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useT } from "@/lib/i18n";
+import { Logo, LogoMark } from "@/components/Logo";
 import { UserMenu } from "./UserMenu";
 
 interface AppSidebarProps {
@@ -76,20 +77,12 @@ function GearIcon() {
   );
 }
 
-function ChevronsLeftIcon() {
+// Lucide "panel-left": frame with the sidebar column marked.
+function PanelLeftIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="m11 17-5-5 5-5" />
-      <path d="m18 17-5-5 5-5" />
-    </svg>
-  );
-}
-
-function ChevronsRightIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="m6 17 5-5-5-5" />
-      <path d="m13 17 5-5-5-5" />
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
     </svg>
   );
 }
@@ -106,8 +99,7 @@ export function AppSidebar({
   const recent = projects.slice(0, MAX_RECENT);
   const [collapsed, setCollapsed] = useState(readStoredCollapsed);
 
-  function toggleCollapsed() {
-    const next = !collapsed;
+  function setCollapsedPersisted(next: boolean) {
     setCollapsed(next);
     writeStoredCollapsed(next);
   }
@@ -118,31 +110,32 @@ export function AppSidebar({
         collapsed ? "w-[64px]" : "w-[248px]"
       }`}
     >
-      <div
-        className={`text-sm ${
-          collapsed
-            ? "flex flex-col items-center gap-2 py-4"
-            : "flex items-center gap-1.5 px-4 py-4"
-        }`}
-      >
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1.5"
-          title={collapsed ? "Atomlet" : undefined}
-          aria-label={collapsed ? "Atomlet" : undefined}
-        >
-          <span className="text-accent-2">◉</span>
-          {!collapsed && <span className="font-semibold">Atomlet</span>}
-        </Link>
-        <button
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? t("shell.expandSidebar") : t("shell.collapseSidebar")}
-          title={collapsed ? t("shell.expandSidebar") : t("shell.collapseSidebar")}
-          className={`${collapsed ? "" : "ml-auto "}w-7 h-7 shrink-0 rounded-md grid place-items-center text-muted hover:text-foreground hover:bg-panel-2 transition-colors`}
-        >
-          {collapsed ? <ChevronsRightIcon /> : <ChevronsLeftIcon />}
-        </button>
-      </div>
+      {collapsed ? (
+        <div className="flex justify-center py-4">
+          <button
+            onClick={() => setCollapsedPersisted(false)}
+            aria-label={t("shell.expandSidebar")}
+            title={t("shell.expandSidebar")}
+            className="w-9 h-9 rounded-lg grid place-items-center hover:bg-panel-2 transition-colors"
+          >
+            <LogoMark size={22} />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 px-4 py-4 text-sm">
+          <Link href="/dashboard" className="flex items-center">
+            <Logo size={22} />
+          </Link>
+          <button
+            onClick={() => setCollapsedPersisted(true)}
+            aria-label={t("shell.collapseSidebar")}
+            title={t("shell.collapseSidebar")}
+            className="ml-auto w-7 h-7 shrink-0 rounded-md grid place-items-center text-muted hover:text-foreground hover:bg-panel-2 transition-colors"
+          >
+            <PanelLeftIcon />
+          </button>
+        </div>
+      )}
 
       <nav className="flex flex-col gap-0.5 px-2">
         <Link

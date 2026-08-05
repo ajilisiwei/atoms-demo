@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/client/api";
 import { useT } from "@/lib/i18n";
+import { Logo } from "@/components/Logo";
 import { OAuthButtons } from "@/components/OAuthButtons";
 
 // Known OAuth error codes (passed by the login page) → dict keys.
@@ -54,7 +55,7 @@ export function AuthForm({ mode, oauthProviders, oauthErrorCode }: AuthFormProps
     <main className="flex-1 flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <Link href="/dashboard" className="block text-center text-lg font-semibold mb-8">
-          <span className="text-gradient">◉ Atomlet</span>
+          <Logo size={22} />
         </Link>
         <div className="rounded-2xl border border-line bg-panel p-8">
           <h1 className="text-xl font-semibold mb-1">

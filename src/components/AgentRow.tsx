@@ -30,7 +30,7 @@ export function AgentRow({ value, onChange, disabled }: AgentRowProps) {
               title={`${agent.name} · ${t(agent.taglineKey)}`}
               aria-label={agent.name}
               aria-pressed={isSelected}
-              className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 transition-all duration-150 hover:z-10 hover:scale-110 ${
+              className={`relative h-10 w-10 sm:h-12 sm:w-12 shrink-0 overflow-hidden rounded-full border-2 transition-all duration-150 hover:z-10 hover:scale-110 ${
                 isSelected
                   ? "z-10 scale-110 border-accent-2 shadow-lg"
                   : "border-panel"

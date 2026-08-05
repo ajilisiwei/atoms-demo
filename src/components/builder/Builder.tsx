@@ -7,6 +7,7 @@ import { api, ApiError, streamGeneration, type VersionMeta } from "@/lib/client/
 import { AUTORUN_PREFIX } from "@/components/DashboardClient";
 import { getBuiltinAgent } from "@/lib/agents";
 import { useT } from "@/lib/i18n";
+import { LogoMark } from "@/components/Logo";
 import { ChatPanel, type RestoredInput } from "./ChatPanel";
 import { PreviewPanel, type PanelTab } from "./PreviewPanel";
 import { PublishDialog } from "./PublishDialog";
@@ -318,7 +319,7 @@ export function Builder({
             />
           </span>
         ) : (
-          <span className="text-accent-2 font-semibold text-sm px-0.5">◉</span>
+          <LogoMark size={20} className="shrink-0" />
         )}
         <button
           type="button"

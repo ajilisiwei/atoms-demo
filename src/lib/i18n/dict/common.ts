@@ -59,4 +59,12 @@ export const commonDict: Record<string, { en: string; zh: string }> = {
   // Generic
   "common.loading": { en: "Loading…", zh: "加载中…" },
   "common.close": { en: "Close", zh: "关闭" },
+  "common.cancel": { en: "Cancel", zh: "取消" },
+  "common.delete": { en: "Delete", zh: "删除" },
+  "common.openMenu": { en: "Open menu", zh: "打开菜单" },
+  "common.confirmDeleteTitle": { en: "Delete this app?", zh: "删除该应用？" },
+  "common.confirmDeleteBody": {
+    en: "“{name}” and all of its versions will be permanently deleted. This cannot be undone.",
+    zh: "“{name}”及其所有版本将被永久删除，此操作无法撤销。",
+  },
 };

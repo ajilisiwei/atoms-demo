@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { LogoMark } from "@/components/Logo";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -37,9 +38,12 @@ export default async function PublishedAppPage({ params }: Props) {
       />
       <Link
         href="/"
-        className="absolute bottom-3 right-3 rounded-full bg-black/80 border border-line px-3 py-1.5 text-xs text-white/90 hover:text-white backdrop-blur transition-colors"
+        className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-black/80 border border-line px-3 py-1.5 text-xs text-white/90 hover:text-white backdrop-blur transition-colors"
       >
-        ⚡ Built with <span className="text-gradient font-semibold">Atomlet</span>
+        <LogoMark size={14} className="shrink-0" />
+        <span>
+          Built with <span className="font-semibold">Atomlet</span>
+        </span>
       </Link>
     </div>
   );

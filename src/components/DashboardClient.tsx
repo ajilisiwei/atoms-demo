@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/client/api";
 import { useT } from "@/lib/i18n";
+import { Logo } from "@/components/Logo";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AppSidebar } from "@/components/shell/AppSidebar";
+import { MobileSidebar } from "@/components/shell/MobileSidebar";
 import { SettingsDialog, type SettingsSection } from "@/components/shell/SettingsDialog";
 import { PromptComposer } from "@/components/composer/PromptComposer";
 import { ProjectsGrid, type ProjectListItem } from "@/components/ProjectsGrid";
@@ -20,6 +23,45 @@ interface DashboardClientProps {
   displayName: string;
   credits: number;
   initialProjects: ProjectListItem[];
+}
+
+function CreditsStarIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="text-muted"
+    >
+      <path d="M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3-4.8-2.5-4.8 2.5.9-5.3L4.3 7.6l5.3-.8z" />
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </svg>
+  );
 }
 
 export function DashboardClient({
@@ -37,6 +79,9 @@ export function DashboardClient({
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("account");
   const [themeName, setThemeName] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<ProjectListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   function openSettings(section: SettingsSection = "account") {
     setSettingsSection(section);
@@ -74,15 +119,19 @@ export function DashboardClient({
     }
   }
 
-  async function deleteProject(id: string) {
-    const target = projects.find((p) => p.id === id);
-    if (!target) return;
-    if (!window.confirm(t("dashboard.deleteConfirm", { name: target.name }))) return;
+  async function confirmDeleteProject() {
+    if (!pendingDelete || deleting) return;
+    const { id } = pendingDelete;
+    setDeleting(true);
+    setError(null);
     try {
       await api(`/api/projects/${id}`, { method: "DELETE" });
       setProjects((prev) => prev.filter((p) => p.id !== id));
+      setPendingDelete(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("dashboard.deleteFailed"));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -107,14 +156,25 @@ export function DashboardClient({
       <main className="flex-1 min-w-0 overflow-y-auto">
         {/* Mobile top bar (sidebar hidden below lg) */}
         <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-line">
-          <Link href="/" className="text-sm font-semibold">
-            <span className="text-accent-2">◉</span> Atomlet
-          </Link>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              aria-label={t("common.openMenu")}
+              className="w-9 h-9 rounded-lg grid place-items-center text-muted hover:text-foreground hover:bg-panel-2 transition-colors"
+            >
+              <MenuIcon />
+            </button>
+            <Link href="/dashboard" className="text-sm">
+              <Logo size={20} />
+            </Link>
+          </div>
           <button
-            onClick={() => openSettings()}
-            className="text-sm text-muted hover:text-foreground"
+            onClick={() => openSettings("credits")}
+            title={t("dashboard.creditsPillTitle")}
+            className="flex items-center gap-1.5 rounded-full border border-line bg-panel px-3 py-1 text-sm hover:border-accent-2/60 transition-colors"
           >
-            {t("settings.title")}
+            <CreditsStarIcon />
+            {credits}
           </button>
         </header>
 
@@ -125,25 +185,12 @@ export function DashboardClient({
             title={t("dashboard.creditsPillTitle")}
             className="flex items-center gap-1.5 rounded-full border border-line bg-panel px-3.5 py-1.5 text-sm hover:border-accent-2/60 transition-colors"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              className="text-muted"
-            >
-              <path d="M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3-4.8-2.5-4.8 2.5.9-5.3L4.3 7.6l5.3-.8z" />
-            </svg>
+            <CreditsStarIcon />
             {credits}
           </button>
         </div>
 
-        <section className="flex flex-col items-center px-6 pt-10 sm:pt-16 pb-14 text-center">
+        <section className="flex flex-col items-center px-4 sm:px-6 pt-8 sm:pt-16 pb-14 text-center">
           <div className="mb-6">
             <AgentRow value={agentId} onChange={setAgentId} disabled={creating} />
           </div>
@@ -166,8 +213,8 @@ export function DashboardClient({
           {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
         </section>
 
-        <section id="apps" className="mx-auto w-full max-w-5xl px-6 pb-20">
-          <div className="flex items-center justify-between mb-4">
+        <section id="apps" className="mx-auto w-full max-w-5xl px-4 sm:px-6 pb-20">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <h2 className="text-sm font-medium">
               {t("dashboard.myApps")}
               <span className="ml-1.5 text-muted">({projects.length})</span>
@@ -182,11 +229,45 @@ export function DashboardClient({
           </div>
           <ProjectsGrid
             projects={projects}
-            onDelete={(id) => void deleteProject(id)}
+            onDelete={(id) => {
+              const target = projects.find((p) => p.id === id);
+              if (target) setPendingDelete(target);
+            }}
             emptyHint={t("dashboard.emptyHint")}
           />
         </section>
       </main>
+
+      <MobileSidebar
+        open={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        userEmail={userEmail}
+        projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        activeNav="home"
+        onOpenSettings={() => {
+          setMobileNavOpen(false);
+          openSettings();
+        }}
+        onLogout={() => void logout()}
+      />
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title={t("common.confirmDeleteTitle")}
+        body={
+          pendingDelete
+            ? t("common.confirmDeleteBody", { name: pendingDelete.name })
+            : undefined
+        }
+        confirmLabel={t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        danger
+        busy={deleting}
+        onConfirm={() => void confirmDeleteProject()}
+        onCancel={() => {
+          if (!deleting) setPendingDelete(null);
+        }}
+      />
 
       <SettingsDialog
         open={settingsOpen}

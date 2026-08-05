@@ -4,6 +4,7 @@ import { getSessionUserId } from "@/lib/auth";
 import { buildGenerationMessages, getLlmClient, LLM_MODEL, type HistoryEntry } from "@/lib/llm";
 import { GenerationParser } from "@/lib/stream-parser";
 import { checkRateLimit } from "@/lib/ratelimit";
+import { getGenerationTheme } from "@/lib/themes";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
-  let body: { prompt?: string };
+  let body: { prompt?: string; themeName?: string | null };
   try {
     body = await req.json();
   } catch {
@@ -46,6 +47,11 @@ export async function POST(req: NextRequest, { params }: Params) {
       { error: `Prompt must be 1-${MAX_PROMPT_LENGTH} characters` },
       { status: 400 }
     );
+  }
+  // themeName semantics: undefined = keep project's theme; "" = clear; id = set.
+  const requestedTheme = body.themeName;
+  if (typeof requestedTheme === "string" && requestedTheme !== "" && !getGenerationTheme(requestedTheme)) {
+    return NextResponse.json({ error: "Unknown theme" }, { status: 400 });
   }
 
   const project = await prisma.project.findFirst({
@@ -65,10 +71,14 @@ export async function POST(req: NextRequest, { params }: Params) {
     .reverse()
     .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
   const latestVersion = project.versions[0] ?? null;
+  const effectiveThemeName =
+    requestedTheme === undefined ? project.themeName : requestedTheme || null;
+  const theme = getGenerationTheme(effectiveThemeName);
   const messages = buildGenerationMessages({
     history,
     currentHtml: latestVersion?.html ?? null,
     prompt,
+    theme,
   });
 
   // Aborts the upstream LLM call when the client disconnects (stream cancel
@@ -129,6 +139,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         // frozen within a transaction, which would otherwise make the
         // user/assistant pair unorderable.
         const summary = parser.summary || "Updated the app.";
+        const suggestions = parser.suggestions;
         const nextNumber = (latestVersion?.number ?? 0) + 1;
         const now = Date.now();
         const [, , version] = await prisma.$transaction([
@@ -141,6 +152,7 @@ export async function POST(req: NextRequest, { params }: Params) {
               role: "assistant",
               content: summary,
               planSteps,
+              suggestions,
               createdAt: new Date(now + 1),
             },
           }),
@@ -153,10 +165,13 @@ export async function POST(req: NextRequest, { params }: Params) {
             },
             select: { id: true, number: true, createdAt: true },
           }),
-          prisma.project.update({ where: { id: projectId }, data: { updatedAt: new Date() } }),
+          prisma.project.update({
+            where: { id: projectId },
+            data: { updatedAt: new Date(), themeName: effectiveThemeName },
+          }),
         ]);
 
-        safeEnqueue({ type: "done", version, summary, planSteps });
+        safeEnqueue({ type: "done", version, summary, planSteps, suggestions });
       } catch (err) {
         if (llmAbort.signal.aborted) {
           // Client left mid-generation — discard partial output silently.

@@ -8,11 +8,26 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
+  id           String         @id @default(cuid())
+  email        String         @unique
+  // Null for users who signed up via OAuth only
+  passwordHash String?
+  name         String?
+  avatarUrl    String?
   projects     Project[]
-  createdAt    DateTime  @default(now())
+  oauthAccounts OAuthAccount[]
+  createdAt    DateTime       @default(now())
+}
+
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String // "github" | "google"
+  providerAccountId String
+  createdAt         DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
 }
 
 model Project {
@@ -20,6 +35,8 @@ model Project {
   userId             String
   user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name               String
+  // Generation theme id (see src/lib/themes.ts); null = no theme constraint
+  themeName          String?
   // Set when the project is published; used as the public URL path /p/[slug]
   slug               String?      @unique
   publishedVersionId String?      @unique
@@ -38,6 +55,8 @@ model Message {
   content   String
   // Agent plan steps captured for assistant messages, rendered as the timeline
   planSteps Json?
+  // Follow-up suggestions ("Add ...") emitted after a build, shown as chips
+  suggestions Json?
   createdAt DateTime @default(now())
 }
 

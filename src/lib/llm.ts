@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { themePromptBlock, type GenerationTheme } from "./themes";
 
 export const LLM_MODEL = process.env.LLM_MODEL ?? "deepseek-v4-flash";
 
@@ -28,6 +29,9 @@ The user describes an app in natural language; you design and implement it as a 
 <SUMMARY>
 One or two sentences (same language as the user) describing what was built or changed.
 </SUMMARY>
+<SUGGESTIONS>
+- three short follow-up feature ideas the user could ask for next, each starting with a verb like "Add"/"添加" (same language as the user), max 8 words each
+</SUGGESTIONS>
 
 ## Rules for the generated app
 
@@ -49,13 +53,17 @@ export function buildGenerationMessages(params: {
   history: HistoryEntry[];
   currentHtml: string | null;
   prompt: string;
+  theme?: GenerationTheme | null;
 }): OpenAI.ChatCompletionMessageParam[] {
-  const { history, currentHtml, prompt } = params;
+  const { history, currentHtml, prompt, theme } = params;
+  const systemContent = theme
+    ? `${BUILDER_SYSTEM_PROMPT}\n\n${themePromptBlock(theme)}`
+    : BUILDER_SYSTEM_PROMPT;
   const finalUserContent = currentHtml
     ? `CURRENT APP CODE:\n${currentHtml}\n\nUSER REQUEST: ${prompt}`
     : `USER REQUEST: ${prompt}`;
   return [
-    { role: "system", content: BUILDER_SYSTEM_PROMPT },
+    { role: "system", content: systemContent },
     // Older turns are passed as prompt/summary pairs only (without full HTML)
     // to keep token usage bounded; the latest HTML above carries the real state.
     ...history.map((h) => ({ role: h.role, content: h.content })),

@@ -1,14 +1,28 @@
 @import "tailwindcss";
 
-:root {
-  --background: #0b0e14;
-  --foreground: #e6e9f0;
-  --panel: #12161f;
-  --panel-2: #171c28;
-  --line: #232a3a;
-  --accent: #7c6aff;
-  --accent-2: #4f8dff;
-  --muted: #8b93a7;
+/* Atoms-style palette. Light is the default appearance; the inline script in
+   layout.tsx sets html[data-appearance] before paint, so there is no flash. */
+:root,
+:root[data-appearance="light"] {
+  --background: #fafaf9;
+  --foreground: #18181b;
+  --panel: #ffffff;
+  --panel-2: #f4f4f5;
+  --line: #e7e7e9;
+  --accent: #3b82f6;
+  --accent-2: #2563eb;
+  --muted: #8e8e93;
+}
+
+:root[data-appearance="dark"] {
+  --background: #1e1e20;
+  --foreground: #ececec;
+  --panel: #252528;
+  --panel-2: #2e2e31;
+  --line: #38383c;
+  --accent: #3b82f6;
+  --accent-2: #2563eb;
+  --muted: #9c9ca3;
 }
 
 @theme inline {
@@ -22,25 +36,26 @@
   --color-muted: var(--muted);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-geist-sans), -apple-system, "PingFang SC", system-ui, sans-serif;
 }
 
-/* Thin dark scrollbars for panels */
+/* Thin scrollbars that adapt to appearance */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2d3548 transparent;
+  scrollbar-color: color-mix(in srgb, var(--muted) 40%, transparent) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #2d3548;
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
   border-radius: 4px;
 }
 *::-webkit-scrollbar-track {
@@ -61,10 +76,16 @@ body {
   animation: blink 1s ease-in-out infinite;
 }
 
-/* Soft gradient text for brand elements */
+/* Brand mark accent (kept subtle in the Atoms-like look) */
 .text-gradient {
   background: linear-gradient(120deg, var(--accent), var(--accent-2));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* Serif display face for hero headings, mirroring Atoms' mixed typography */
+.font-display {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
 }

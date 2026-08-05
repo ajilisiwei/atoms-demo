@@ -5,6 +5,7 @@ import {
   useAppearance,
   type Appearance,
 } from "@/components/appearance/AppearanceProvider";
+import { useT } from "@/lib/i18n";
 
 interface UserMenuProps {
   userEmail: string;
@@ -12,10 +13,10 @@ interface UserMenuProps {
   onLogout: () => void;
 }
 
-const APPEARANCE_SEGMENTS: { value: Appearance; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "Auto" },
+const APPEARANCE_SEGMENTS: { value: Appearance; labelKey: string }[] = [
+  { value: "light", labelKey: "appearance.light" },
+  { value: "dark", labelKey: "appearance.dark" },
+  { value: "system", labelKey: "shell.appearance.auto" },
 ];
 
 function GearIcon() {
@@ -39,6 +40,7 @@ function GearIcon() {
 }
 
 export function UserMenu({ userEmail, onOpenSettings, onLogout }: UserMenuProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { appearance, setAppearance } = useAppearance();
@@ -101,11 +103,11 @@ export function UserMenu({ userEmail, onOpenSettings, onLogout }: UserMenuProps)
             className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-panel-2 text-left transition-colors"
           >
             <GearIcon />
-            Settings
+            {t("settings.title")}
           </button>
 
           <div className="px-3 py-2 flex items-center justify-between">
-            <span className="text-sm">Appearance</span>
+            <span className="text-sm">{t("settings.appearance")}</span>
             <div className="flex items-center gap-0.5">
               {APPEARANCE_SEGMENTS.map((seg) => (
                 <button
@@ -117,7 +119,7 @@ export function UserMenu({ userEmail, onOpenSettings, onLogout }: UserMenuProps)
                       : "text-muted hover:text-foreground"
                   }`}
                 >
-                  {seg.label}
+                  {t(seg.labelKey)}
                 </button>
               ))}
             </div>
@@ -133,7 +135,7 @@ export function UserMenu({ userEmail, onOpenSettings, onLogout }: UserMenuProps)
             }}
             className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-panel-2 text-left text-red-500 transition-colors"
           >
-            Log out
+            {t("settings.logout")}
           </button>
         </div>
       )}

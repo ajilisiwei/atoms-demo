@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useT } from "@/lib/i18n";
 
 export interface ProjectListItem {
   id: string;
@@ -17,21 +18,25 @@ interface ProjectsGridProps {
   emptyHint?: string;
 }
 
-function timeAgo(iso: string): string {
+type Translator = ReturnType<typeof useT>;
+
+function timeAgo(iso: string, t: Translator): string {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return "just now";
+  if (seconds < 60) return t("shell.time.justNow");
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return t("shell.time.minutesAgo", { n: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return t("shell.time.hoursAgo", { n: hours });
+  return t("shell.time.daysAgo", { n: Math.floor(hours / 24) });
 }
 
 export function ProjectsGrid({ projects, onDelete, emptyHint }: ProjectsGridProps) {
+  const t = useT();
+
   if (projects.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-line p-12 text-center text-muted text-sm">
-        {emptyHint ?? "No apps yet — describe one to get started."}
+        {emptyHint ?? t("shell.emptyDefault")}
       </div>
     );
   }
@@ -49,13 +54,15 @@ export function ProjectsGrid({ projects, onDelete, emptyHint }: ProjectsGridProp
                 {p.name}
               </h3>
               <p className="text-xs text-muted mt-1">
-                {p.versionCount} version{p.versionCount === 1 ? "" : "s"} ·{" "}
-                {timeAgo(p.updatedAt)}
+                {t(p.versionCount === 1 ? "shell.versionOne" : "shell.versionMany", {
+                  count: p.versionCount,
+                })}{" "}
+                · {timeAgo(p.updatedAt, t)}
               </p>
             </Link>
             <button
               onClick={() => onDelete(p.id)}
-              title="Delete project"
+              title={t("shell.deleteProject")}
               className="opacity-0 group-hover:opacity-100 text-muted hover:text-red-500 transition-all text-sm"
             >
               ✕
@@ -69,11 +76,11 @@ export function ProjectsGrid({ projects, onDelete, emptyHint }: ProjectsGridProp
                 rel="noreferrer"
                 className="rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 px-2.5 py-1 hover:bg-emerald-100 transition-colors dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900"
               >
-                ● Live
+                ● {t("shell.live")}
               </a>
             ) : (
               <span className="rounded-full bg-panel-2 text-muted border border-line px-2.5 py-1">
-                Draft
+                {t("shell.draft")}
               </span>
             )}
           </div>

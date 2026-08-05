@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { api, ApiError } from "@/lib/client/api";
-import { PENDING_PROMPT_KEY } from "@/components/HeroPrompt";
+import { useT } from "@/lib/i18n";
 import { AppSidebar } from "@/components/shell/AppSidebar";
 import { SettingsDialog, type SettingsSection } from "@/components/shell/SettingsDialog";
 import { PromptComposer } from "@/components/composer/PromptComposer";
@@ -27,6 +27,7 @@ export function DashboardClient({
   credits,
   initialProjects,
 }: DashboardClientProps) {
+  const t = useT();
   const router = useRouter();
   const [projects, setProjects] = useState(initialProjects);
   const [creating, setCreating] = useState(false);
@@ -34,15 +35,6 @@ export function DashboardClient({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("account");
   const [themeName, setThemeName] = useState<string | null>(null);
-  const autoStarted = useRef(false);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   function openSettings(section: SettingsSection = "account") {
     setSettingsSection(section);
@@ -67,38 +59,20 @@ export function DashboardClient({
       }
       router.push(`/builder/${project.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to create project");
+      setError(err instanceof ApiError ? err.message : t("dashboard.createFailed"));
       setCreating(false);
     }
   }
 
-  // If the user typed a prompt on the landing page before signing up, pick it
-  // up and jump straight into the builder. Deferred via setTimeout so no state
-  // updates happen synchronously inside the effect; no cleanup on purpose —
-  // clearing the timer would drop the autorun under Strict Mode's remount,
-  // so the mountedRef guards instead.
-  useEffect(() => {
-    if (autoStarted.current) return;
-    const pending = sessionStorage.getItem(PENDING_PROMPT_KEY);
-    if (pending) {
-      autoStarted.current = true;
-      sessionStorage.removeItem(PENDING_PROMPT_KEY);
-      setTimeout(() => {
-        if (mountedRef.current) void createProject(pending);
-      }, 0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   async function deleteProject(id: string) {
     const target = projects.find((p) => p.id === id);
     if (!target) return;
-    if (!window.confirm(`Delete "${target.name}"? This cannot be undone.`)) return;
+    if (!window.confirm(t("dashboard.deleteConfirm", { name: target.name }))) return;
     try {
       await api(`/api/projects/${id}`, { method: "DELETE" });
       setProjects((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to delete project");
+      setError(err instanceof ApiError ? err.message : t("dashboard.deleteFailed"));
     }
   }
 
@@ -130,7 +104,7 @@ export function DashboardClient({
             onClick={() => openSettings()}
             className="text-sm text-muted hover:text-foreground"
           >
-            Settings
+            {t("settings.title")}
           </button>
         </header>
 
@@ -138,7 +112,7 @@ export function DashboardClient({
         <div className="hidden lg:flex justify-end px-6 pt-5">
           <button
             onClick={() => openSettings("credits")}
-            title="Credits — open details"
+            title={t("dashboard.creditsPillTitle")}
             className="flex items-center gap-1.5 rounded-full border border-line bg-panel px-3.5 py-1.5 text-sm hover:border-accent-2/60 transition-colors"
           >
             <svg
@@ -161,11 +135,11 @@ export function DashboardClient({
 
         <section className="flex flex-col items-center px-6 pt-12 sm:pt-20 pb-14 text-center">
           <h1 className="font-display text-3xl sm:text-[44px] leading-tight tracking-tight">
-            What will you create, {displayName}?
+            {t("dashboard.heroTitle", { name: displayName })}
           </h1>
           <div className="mt-9 w-full max-w-2xl text-left">
             <PromptComposer
-              placeholder="Describe the app you want to build…"
+              placeholder={t("dashboard.composerPlaceholder")}
               disabled={creating}
               themeValue={themeName}
               onThemeChange={setThemeName}
@@ -174,7 +148,7 @@ export function DashboardClient({
             />
           </div>
           {creating && (
-            <p className="mt-4 text-sm text-muted">Creating your project…</p>
+            <p className="mt-4 text-sm text-muted">{t("dashboard.creating")}</p>
           )}
           {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
         </section>
@@ -182,7 +156,7 @@ export function DashboardClient({
         <section id="apps" className="mx-auto w-full max-w-5xl px-6 pb-20">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-medium">
-              My apps
+              {t("dashboard.myApps")}
               <span className="ml-1.5 text-muted">({projects.length})</span>
             </h2>
             <button
@@ -190,13 +164,13 @@ export function DashboardClient({
               className="text-sm text-accent-2 hover:underline"
               disabled={creating}
             >
-              + Blank project
+              {t("dashboard.blankProject")}
             </button>
           </div>
           <ProjectsGrid
             projects={projects}
             onDelete={(id) => void deleteProject(id)}
-            emptyHint="No apps yet — describe one above to get started."
+            emptyHint={t("dashboard.emptyHint")}
           />
         </section>
       </main>

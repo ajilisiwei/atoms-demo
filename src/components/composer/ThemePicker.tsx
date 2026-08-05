@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useT } from "@/lib/i18n";
 import { GENERATION_THEMES, getGenerationTheme } from "@/lib/themes";
 
 interface ThemePickerProps {
@@ -24,6 +25,7 @@ function PreviewDots({ colors }: { colors: readonly string[] }) {
 }
 
 export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -82,7 +84,7 @@ export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
           <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
           <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
         </svg>
-        <span className="truncate">{selected ? selected.name : "Theme"}</span>
+        <span className="truncate">{selected ? selected.name : t("composer.theme")}</span>
         {selected && <PreviewDots colors={selected.preview} />}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="m6 9 6 6 6-6" />
@@ -94,7 +96,7 @@ export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search themes…"
+            placeholder={t("composer.searchThemes")}
             autoFocus
             className="m-2 rounded-lg bg-panel-2 px-3 py-2 text-sm outline-none w-[calc(100%-1rem)] placeholder:text-muted"
           />
@@ -105,11 +107,11 @@ export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
               className="w-full text-left flex items-center justify-between px-4 py-2 text-sm hover:bg-panel-2 cursor-pointer"
             >
               <span className="flex items-center gap-1.5">
-                No theme
+                {t("composer.noTheme")}
                 {value === null && <span className="text-accent-2">✓</span>}
               </span>
             </button>
-            <p className="px-4 pt-2 pb-1 text-xs text-muted">Default themes</p>
+            <p className="px-4 pt-2 pb-1 text-xs text-muted">{t("composer.defaultThemes")}</p>
             {filtered.map((theme) => (
               <button
                 key={theme.id}
@@ -125,7 +127,7 @@ export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
               </button>
             ))}
             {filtered.length === 0 && (
-              <p className="px-4 py-3 text-sm text-muted">No themes match.</p>
+              <p className="px-4 py-3 text-sm text-muted">{t("composer.noThemesMatch")}</p>
             )}
           </div>
         </div>

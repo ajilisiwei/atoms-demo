@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ThemePicker } from "@/components/composer/ThemePicker";
+import { useT } from "@/lib/i18n";
 import type { GenerationState, UiMessage } from "./types";
 
 export interface RestoredInput {
@@ -60,6 +61,7 @@ export function ChatPanel({
   onThemeChange,
   outOfCredits,
 }: ChatPanelProps) {
+  const t = useT();
   const [input, setInput] = useState("");
   const [lastRestoredAt, setLastRestoredAt] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -95,10 +97,7 @@ export function ChatPanel({
         {messages.length === 0 && !generating && (
           <div className="m-auto text-center text-muted max-w-xs">
             <p className="text-3xl mb-3">🤖</p>
-            <p className="text-sm leading-relaxed">
-              Describe the app you want and the agent will plan it, write the
-              code and render it live on the right.
-            </p>
+            <p className="text-sm leading-relaxed">{t("builder.chat.empty")}</p>
           </div>
         )}
 
@@ -115,7 +114,7 @@ export function ChatPanel({
               {m.planSteps && m.planSteps.length > 0 && (
                 <details className="mt-2">
                   <summary className="text-xs text-muted cursor-pointer select-none hover:text-foreground">
-                    Build plan ({m.planSteps.length} steps)
+                    {t("builder.chat.buildPlan", { count: m.planSteps.length })}
                   </summary>
                   <PlanTimeline steps={m.planSteps} live={false} />
                 </details>
@@ -150,10 +149,13 @@ export function ChatPanel({
             <div className="rounded-2xl rounded-bl-md bg-panel-2 border border-accent/40 px-4 py-3">
               <p className="text-sm font-medium flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-accent animate-blink" />
-                {generation.phase === "planning" && "Planning the app…"}
+                {generation.phase === "planning" && t("builder.chat.phase.planning")}
                 {generation.phase === "coding" &&
-                  `Writing code… ${(generation.htmlLength / 1024).toFixed(1)} KB`}
-                {generation.phase === "finishing" && "Finishing up…"}
+                  t("builder.chat.phase.coding", {
+                    kb: (generation.htmlLength / 1024).toFixed(1),
+                  })}
+                {generation.phase === "finishing" &&
+                  t("builder.chat.phase.finishing")}
               </p>
               <PlanTimeline
                 steps={generation.planSteps}
@@ -177,8 +179,7 @@ export function ChatPanel({
       <div className="border-t border-line p-3">
         {outOfCredits && (
           <div className="mb-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-xs leading-relaxed text-amber-600 dark:text-amber-400">
-            You&apos;ve used all your credits, so generation is paused. 1 credit
-            covers ~1K tokens — see Settings → Credits for details.
+            {t("builder.chat.outOfCredits")}
           </div>
         )}
         <form
@@ -201,10 +202,10 @@ export function ChatPanel({
             disabled={sendBlocked}
             placeholder={
               outOfCredits
-                ? "Out of credits — generation is paused"
+                ? t("builder.chat.placeholder.outOfCredits")
                 : messages.length === 0
-                  ? "Describe your app… (Enter to send)"
-                  : "Describe a change… (Enter to send)"
+                  ? t("builder.chat.placeholder.first")
+                  : t("builder.chat.placeholder.change")
             }
             className="w-full resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted disabled:opacity-50"
           />
@@ -221,7 +222,7 @@ export function ChatPanel({
             <button
               type="submit"
               disabled={sendBlocked || !input.trim()}
-              aria-label="Send"
+              aria-label={t("builder.chat.send")}
               className="w-9 h-9 rounded-full bg-foreground text-background grid place-items-center hover:opacity-85 transition-opacity disabled:opacity-30"
             >
               <svg

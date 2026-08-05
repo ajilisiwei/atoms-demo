@@ -4,19 +4,31 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/client/api";
+import { useT } from "@/lib/i18n";
 import { OAuthButtons } from "@/components/OAuthButtons";
+
+// Known OAuth error codes (passed by the login page) → dict keys.
+const OAUTH_ERROR_KEYS: Record<string, string> = {
+  oauth: "auth.oauthError",
+  oauth_email: "auth.oauthEmailError",
+};
 
 interface AuthFormProps {
   mode: "login" | "register";
   oauthProviders?: string[];
-  initialError?: string | null;
+  oauthErrorCode?: string | null;
 }
 
-export function AuthForm({ mode, oauthProviders, initialError }: AuthFormProps) {
+export function AuthForm({ mode, oauthProviders, oauthErrorCode }: AuthFormProps) {
+  const t = useT();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(initialError ?? null);
+  // Seed with the localized OAuth error; unknown codes fall back to the
+  // generic OAuth failure message.
+  const [error, setError] = useState<string | null>(() =>
+    oauthErrorCode ? t(OAUTH_ERROR_KEYS[oauthErrorCode] ?? "auth.oauthError") : null
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const isRegister = mode === "register";
@@ -33,7 +45,7 @@ export function AuthForm({ mode, oauthProviders, initialError }: AuthFormProps) 
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong, please retry");
+      setError(err instanceof ApiError ? err.message : t("auth.genericError"));
       setSubmitting(false);
     }
   }
@@ -41,21 +53,19 @@ export function AuthForm({ mode, oauthProviders, initialError }: AuthFormProps) 
   return (
     <main className="flex-1 flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
-        <Link href="/" className="block text-center text-lg font-semibold mb-8">
+        <Link href="/dashboard" className="block text-center text-lg font-semibold mb-8">
           <span className="text-gradient">◉ Atomlet</span>
         </Link>
         <div className="rounded-2xl border border-line bg-panel p-8">
           <h1 className="text-xl font-semibold mb-1">
-            {isRegister ? "Create your account" : "Welcome back"}
+            {isRegister ? t("auth.createTitle") : t("auth.loginTitle")}
           </h1>
           <p className="text-sm text-muted mb-6">
-            {isRegister
-              ? "Start building apps from a sentence."
-              : "Log in to continue building."}
+            {isRegister ? t("auth.createSubtitle") : t("auth.loginSubtitle")}
           </p>
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm text-muted">Email</span>
+              <span className="text-sm text-muted">{t("auth.email")}</span>
               <input
                 type="email"
                 required
@@ -67,7 +77,7 @@ export function AuthForm({ mode, oauthProviders, initialError }: AuthFormProps) 
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-sm text-muted">
-                Password{isRegister ? " (8+ characters)" : ""}
+                {isRegister ? t("auth.passwordWithHint") : t("auth.password")}
               </span>
               <input
                 type="password"
@@ -89,7 +99,11 @@ export function AuthForm({ mode, oauthProviders, initialError }: AuthFormProps) 
               disabled={submitting}
               className="mt-2 rounded-lg bg-foreground py-2.5 font-medium text-background hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {submitting ? "Please wait…" : isRegister ? "Create account" : "Log in"}
+              {submitting
+                ? t("auth.pleaseWait")
+                : isRegister
+                  ? t("auth.createAccount")
+                  : t("auth.logIn")}
             </button>
           </form>
           <OAuthButtons providers={oauthProviders ?? []} />
@@ -97,16 +111,16 @@ export function AuthForm({ mode, oauthProviders, initialError }: AuthFormProps) 
         <p className="text-center text-sm text-muted mt-6">
           {isRegister ? (
             <>
-              Already have an account?{" "}
+              {t("auth.haveAccount")}{" "}
               <Link href="/login" className="text-accent-2 hover:underline">
-                Log in
+                {t("auth.logIn")}
               </Link>
             </>
           ) : (
             <>
-              New to Atomlet?{" "}
+              {t("auth.newTo")}{" "}
               <Link href="/register" className="text-accent-2 hover:underline">
-                Create an account
+                {t("auth.createAccountLink")}
               </Link>
             </>
           )}

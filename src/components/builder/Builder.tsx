@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, streamGeneration, type VersionMeta } from "@/lib/client/api";
 import { AUTORUN_PREFIX } from "@/components/DashboardClient";
+import { useT } from "@/lib/i18n";
 import { ChatPanel, type RestoredInput } from "./ChatPanel";
 import { PreviewPanel, type PanelTab } from "./PreviewPanel";
 import { PublishDialog } from "./PublishDialog";
@@ -24,6 +25,7 @@ export function Builder({
   initialHtml,
   initialCredits,
 }: BuilderProps) {
+  const t = useT();
   const [project, setProject] = useState(initialProject);
   const [name, setName] = useState(initialProject.name);
   const [messages, setMessages] = useState(initialMessages);
@@ -39,6 +41,8 @@ export function Builder({
   const [publishOpen, setPublishOpen] = useState(false);
   const [themeName, setThemeName] = useState<string | null>(initialProject.themeName);
   const [credits, setCredits] = useState(initialCredits);
+  // Not persisted — resets to expanded on reload.
+  const [chatCollapsed, setChatCollapsed] = useState(false);
 
   const htmlBufRef = useRef("");
   const generatingRef = useRef(false);
@@ -137,7 +141,7 @@ export function Builder({
           ? null // component unmounted / navigation — stay silent
           : err instanceof ApiError
             ? err.message
-            : "Generation failed — please retry";
+            : t("builder.error.generationFailed");
       } finally {
         clearInterval(flushTimer);
         generatingRef.current = false;
@@ -152,7 +156,7 @@ export function Builder({
         setTab(hasVersions ? "preview" : "code");
       }
     },
-    [project.id, hasVersions, themeName]
+    [project.id, hasVersions, themeName, t]
   );
 
   // Auto-run the prompt carried over from the landing page / dashboard.
@@ -217,7 +221,9 @@ export function Builder({
       setViewingHtml(version.html);
       setTab("preview");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load version");
+      setError(
+        err instanceof ApiError ? err.message : t("builder.error.loadVersionFailed")
+      );
     }
   }
 
@@ -238,14 +244,21 @@ export function Builder({
         {
           id: `local-r-${Date.now()}`,
           role: "assistant",
-          content: `Restored ${version.promptSummary.toLowerCase()} as v${version.number}.`,
+          content: t("builder.chat.restored", {
+            summary: version.promptSummary.toLowerCase(),
+            number: version.number,
+          }),
           planSteps: null,
         },
       ]);
       if (viewingHtml) setCurrentHtml(viewingHtml);
       backToLatest();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to restore version");
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : t("builder.error.restoreVersionFailed")
+      );
     }
   }
 
@@ -261,11 +274,69 @@ export function Builder({
       <header className="flex items-center gap-3 border-b border-line px-4 py-2.5">
         <Link
           href="/dashboard"
-          className="text-muted hover:text-foreground transition-colors text-sm shrink-0"
-          title="Back to dashboard"
+          className="w-8 h-8 shrink-0 rounded-lg hover:bg-panel-2 grid place-items-center text-muted hover:text-foreground transition-colors"
+          title={t("builder.header.backToDashboard")}
+          aria-label={t("builder.header.backToDashboard")}
         >
-          ← <span className="text-gradient font-semibold">◉</span>
+          <svg
+            className="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </Link>
+        <span className="text-accent-2 font-semibold text-sm px-0.5">◉</span>
+        <button
+          type="button"
+          onClick={() => setChatCollapsed((prev) => !prev)}
+          aria-label={
+            chatCollapsed
+              ? t("builder.header.expandChat")
+              : t("builder.header.collapseChat")
+          }
+          title={
+            chatCollapsed
+              ? t("builder.header.expandChat")
+              : t("builder.header.collapseChat")
+          }
+          className="w-8 h-8 shrink-0 rounded-lg hover:bg-panel-2 grid place-items-center text-muted hover:text-foreground transition-colors"
+        >
+          {chatCollapsed ? (
+            <svg
+              className="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 17 5-5-5-5" />
+              <path d="m13 17 5-5-5-5" />
+            </svg>
+          ) : (
+            <svg
+              className="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m11 17-5-5 5-5" />
+              <path d="m18 17-5-5 5-5" />
+            </svg>
+          )}
+        </button>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -283,7 +354,7 @@ export function Builder({
               rel="noreferrer"
               className="rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-900 px-3 py-1 text-xs hover:bg-emerald-950 transition-colors"
             >
-              ● Live ↗
+              ● {t("builder.header.live")}
             </a>
           )}
           <button
@@ -291,13 +362,21 @@ export function Builder({
             disabled={!latestVersion}
             className="rounded-lg bg-gradient-to-r from-accent to-accent-2 px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-40"
           >
-            Publish
+            {t("builder.header.publish")}
           </button>
         </div>
       </header>
 
       <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
-        <div className="flex flex-col h-2/5 lg:h-auto lg:w-[420px] lg:shrink-0 border-b lg:border-b-0 lg:border-r border-line">
+        {/* Kept mounted while collapsed (display:none) so ChatPanel state and
+            an in-flight generation stream survive the toggle. */}
+        <div
+          className={
+            chatCollapsed
+              ? "hidden"
+              : "flex flex-col h-2/5 lg:h-auto lg:w-[420px] lg:shrink-0 border-b lg:border-b-0 lg:border-r border-line"
+          }
+        >
           <ChatPanel
             messages={messages}
             generation={generation}

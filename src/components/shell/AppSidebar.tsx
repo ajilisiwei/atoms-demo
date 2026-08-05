@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { useT } from "@/lib/i18n";
 import { UserMenu } from "./UserMenu";
 
 interface AppSidebarProps {
@@ -14,12 +16,34 @@ interface AppSidebarProps {
 }
 
 const MAX_RECENT = 8;
+const COLLAPSED_STORAGE_KEY = "atomlet:sidebar-collapsed";
 
-const ITEM_CLASS =
-  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-panel-2 transition-colors";
+function readStoredCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(COLLAPSED_STORAGE_KEY) === "1";
+  } catch {
+    // localStorage unavailable (e.g. blocked) — default to expanded
+    return false;
+  }
+}
 
-function itemClass(active: boolean): string {
-  return active ? `${ITEM_CLASS} bg-panel-2 font-medium` : ITEM_CLASS;
+function writeStoredCollapsed(collapsed: boolean): void {
+  try {
+    window.localStorage.setItem(COLLAPSED_STORAGE_KEY, collapsed ? "1" : "0");
+  } catch {
+    // localStorage unavailable — the in-memory state still applies
+  }
+}
+
+const ITEM_BASE =
+  "flex items-center rounded-lg py-2 text-sm text-foreground hover:bg-panel-2 transition-colors";
+
+function itemClass(active: boolean, collapsed: boolean): string {
+  const layout = collapsed ? "justify-center" : "gap-2.5 px-3";
+  return active
+    ? `${ITEM_BASE} ${layout} bg-panel-2 font-medium`
+    : `${ITEM_BASE} ${layout}`;
 }
 
 function HouseIcon() {
@@ -52,6 +76,24 @@ function GearIcon() {
   );
 }
 
+function ChevronsLeftIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m11 17-5-5 5-5" />
+      <path d="m18 17-5-5 5-5" />
+    </svg>
+  );
+}
+
+function ChevronsRightIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m6 17 5-5-5-5" />
+      <path d="m13 17 5-5-5-5" />
+    </svg>
+  );
+}
+
 export function AppSidebar({
   userEmail,
   projects,
@@ -60,33 +102,71 @@ export function AppSidebar({
   onOpenSettings,
   onLogout,
 }: AppSidebarProps) {
+  const t = useT();
   const recent = projects.slice(0, MAX_RECENT);
+  const [collapsed, setCollapsed] = useState(readStoredCollapsed);
+
+  function toggleCollapsed() {
+    const next = !collapsed;
+    setCollapsed(next);
+    writeStoredCollapsed(next);
+  }
 
   return (
-    <aside className="h-full w-[248px] shrink-0 flex flex-col border-r border-line">
-      <Link href="/" className="flex items-center gap-1.5 px-4 py-4 text-sm">
-        <span className="text-accent-2">◉</span>
-        <span className="font-semibold">Atomlet</span>
-      </Link>
+    <aside
+      className={`h-full shrink-0 flex flex-col border-r border-line transition-[width] duration-200 ${
+        collapsed ? "w-[64px]" : "w-[248px]"
+      }`}
+    >
+      <div
+        className={`text-sm ${
+          collapsed
+            ? "flex flex-col items-center gap-2 py-4"
+            : "flex items-center gap-1.5 px-4 py-4"
+        }`}
+      >
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1.5"
+          title={collapsed ? "Atomlet" : undefined}
+          aria-label={collapsed ? "Atomlet" : undefined}
+        >
+          <span className="text-accent-2">◉</span>
+          {!collapsed && <span className="font-semibold">Atomlet</span>}
+        </Link>
+        <button
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? t("shell.expandSidebar") : t("shell.collapseSidebar")}
+          title={collapsed ? t("shell.expandSidebar") : t("shell.collapseSidebar")}
+          className={`${collapsed ? "" : "ml-auto "}w-7 h-7 shrink-0 rounded-md grid place-items-center text-muted hover:text-foreground hover:bg-panel-2 transition-colors`}
+        >
+          {collapsed ? <ChevronsRightIcon /> : <ChevronsLeftIcon />}
+        </button>
+      </div>
 
       <nav className="flex flex-col gap-0.5 px-2">
         <Link
           href="/dashboard"
-          className={itemClass(activeNav === "home" && !activeProjectId)}
+          title={collapsed ? t("shell.home") : undefined}
+          className={itemClass(activeNav === "home" && !activeProjectId, collapsed)}
         >
           <HouseIcon />
-          Home
+          {!collapsed && t("shell.home")}
         </Link>
-        <Link href="/apps" className={itemClass(activeNav === "apps")}>
+        <Link
+          href="/apps"
+          title={collapsed ? t("shell.myApps") : undefined}
+          className={itemClass(activeNav === "apps", collapsed)}
+        >
           <GridIcon />
-          My apps
+          {!collapsed && t("shell.myApps")}
         </Link>
       </nav>
 
-      {recent.length > 0 && (
+      {!collapsed && recent.length > 0 && (
         <>
           <p className="px-5 pt-5 pb-1.5 text-xs text-muted uppercase tracking-wide">
-            Recent
+            {t("shell.recent")}
           </p>
           <nav className="flex flex-col gap-0.5 px-2 overflow-y-auto">
             {recent.map((project) => (
@@ -94,7 +174,7 @@ export function AppSidebar({
                 key={project.id}
                 href={`/builder/${project.id}`}
                 title={project.name}
-                className={itemClass(project.id === activeProjectId)}
+                className={itemClass(project.id === activeProjectId, false)}
               >
                 <span className="min-w-0 flex-1 truncate">{project.name}</span>
               </Link>
@@ -105,23 +185,31 @@ export function AppSidebar({
 
       <div className="flex-1" />
 
-      <div className="border-t border-line px-3 py-3 flex items-center gap-2.5">
+      <div
+        className={`border-t border-line py-3 flex items-center ${
+          collapsed ? "justify-center" : "px-3 gap-2.5"
+        }`}
+      >
         <UserMenu
           userEmail={userEmail}
           onOpenSettings={onOpenSettings}
           onLogout={onLogout}
         />
-        <span className="text-xs text-muted truncate flex-1" title={userEmail}>
-          {userEmail}
-        </span>
-        <button
-          onClick={onOpenSettings}
-          title="Settings"
-          aria-label="Open settings"
-          className="w-8 h-8 shrink-0 rounded-lg hover:bg-panel-2 grid place-items-center text-muted hover:text-foreground transition-colors"
-        >
-          <GearIcon />
-        </button>
+        {!collapsed && (
+          <>
+            <span className="text-xs text-muted truncate flex-1" title={userEmail}>
+              {userEmail}
+            </span>
+            <button
+              onClick={onOpenSettings}
+              title={t("settings.title")}
+              aria-label={t("shell.openSettings")}
+              className="w-8 h-8 shrink-0 rounded-lg hover:bg-panel-2 grid place-items-center text-muted hover:text-foreground transition-colors"
+            >
+              <GearIcon />
+            </button>
+          </>
+        )}
       </div>
     </aside>
   );

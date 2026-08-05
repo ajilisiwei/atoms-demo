@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { VersionMeta } from "@/lib/client/api";
+import { useT } from "@/lib/i18n";
 
 export type PanelTab = "preview" | "code" | "versions";
 
@@ -28,16 +29,16 @@ interface PreviewPanelProps {
   onRestoreVersion: (versionId: string) => void;
 }
 
-const TABS: { key: PanelTab; label: string }[] = [
-  { key: "preview", label: "Preview" },
-  { key: "code", label: "Code" },
-  { key: "versions", label: "Versions" },
+const TABS: { key: PanelTab; labelKey: string }[] = [
+  { key: "preview", labelKey: "builder.tabs.preview" },
+  { key: "code", labelKey: "builder.tabs.code" },
+  { key: "versions", labelKey: "builder.tabs.versions" },
 ];
 
-const DEVICE_OPTIONS: { key: DeviceWidth; title: string; icon: ReactNode }[] = [
+const DEVICE_OPTIONS: { key: DeviceWidth; titleKey: string; icon: ReactNode }[] = [
   {
     key: "full",
-    title: "Desktop width",
+    titleKey: "builder.device.desktop",
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -55,7 +56,7 @@ const DEVICE_OPTIONS: { key: DeviceWidth; title: string; icon: ReactNode }[] = [
   },
   {
     key: "md",
-    title: "Tablet width",
+    titleKey: "builder.device.tablet",
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -73,7 +74,7 @@ const DEVICE_OPTIONS: { key: DeviceWidth; title: string; icon: ReactNode }[] = [
   },
   {
     key: "sm",
-    title: "Phone width",
+    titleKey: "builder.device.phone",
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -110,6 +111,7 @@ export function PreviewPanel({
   onBackToLatest,
   onRestoreVersion,
 }: PreviewPanelProps) {
+  const t = useT();
   const codeRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   const [deviceWidth, setDeviceWidth] = useState<DeviceWidth>("full");
@@ -135,18 +137,18 @@ export function PreviewPanel({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1 border-b border-line px-3 py-2">
-        {TABS.map((t) => (
+        {TABS.map((tabDef) => (
           <button
-            key={t.key}
-            onClick={() => onTabChange(t.key)}
+            key={tabDef.key}
+            onClick={() => onTabChange(tabDef.key)}
             className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-              tab === t.key
+              tab === tabDef.key
                 ? "bg-panel-2 text-foreground"
                 : "text-muted hover:text-foreground"
             }`}
           >
-            {t.label}
-            {t.key === "versions" && versions.length > 0 && (
+            {t(tabDef.labelKey)}
+            {tabDef.key === "versions" && versions.length > 0 && (
               <span className="ml-1.5 text-xs text-muted">{versions.length}</span>
             )}
           </button>
@@ -156,7 +158,7 @@ export function PreviewPanel({
             onClick={copyCode}
             className="ml-auto text-xs text-muted hover:text-foreground transition-colors"
           >
-            {copied ? "Copied ✓" : "Copy"}
+            {copied ? t("builder.copied") : t("builder.copy")}
           </button>
         )}
         {tab === "preview" && previewSrc && !streaming && (
@@ -165,8 +167,8 @@ export function PreviewPanel({
               <button
                 key={d.key}
                 onClick={() => setDeviceWidth(d.key)}
-                title={d.title}
-                aria-label={d.title}
+                title={t(d.titleKey)}
+                aria-label={t(d.titleKey)}
                 className={`w-7 h-7 rounded-md grid place-items-center transition-colors ${
                   deviceWidth === d.key
                     ? "bg-panel-2 text-foreground"
@@ -178,8 +180,8 @@ export function PreviewPanel({
             ))}
             <button
               onClick={() => setReloadNonce((n) => n + 1)}
-              title="Refresh preview"
-              aria-label="Refresh preview"
+              title={t("builder.preview.refresh")}
+              aria-label={t("builder.preview.refresh")}
               className="w-7 h-7 rounded-md grid place-items-center text-muted hover:text-foreground transition-colors"
             >
               <svg
@@ -197,8 +199,8 @@ export function PreviewPanel({
             </button>
             <button
               onClick={() => window.open(previewSrc, "_blank", "noopener,noreferrer")}
-              title="Open in new tab"
-              aria-label="Open in new tab"
+              title={t("builder.preview.openNewTab")}
+              aria-label={t("builder.preview.openNewTab")}
               className="w-7 h-7 rounded-md grid place-items-center text-muted hover:text-foreground transition-colors"
             >
               <svg
@@ -220,19 +222,19 @@ export function PreviewPanel({
 
       {viewing && (
         <div className="flex items-center justify-between gap-3 border-b border-line bg-panel-2 px-4 py-2 text-sm text-muted">
-          <span>Viewing v{viewing.number} — not the latest version</span>
+          <span>{t("builder.versions.viewingBanner", { n: viewing.number })}</span>
           <span className="flex gap-3 shrink-0">
             <button
               onClick={() => onRestoreVersion(viewing.id)}
               className="hover:underline font-medium text-foreground"
             >
-              Restore
+              {t("builder.versions.restore")}
             </button>
             <button
               onClick={onBackToLatest}
               className="hover:underline hover:text-foreground"
             >
-              Back to latest
+              {t("builder.versions.backToLatest")}
             </button>
           </span>
         </div>
@@ -249,15 +251,15 @@ export function PreviewPanel({
               <iframe
                 key={previewSrc + "-" + reloadNonce}
                 src={previewSrc}
-                title="App preview"
+                title={t("builder.preview.iframeTitle")}
                 className={`bg-white ${IFRAME_CLASS[deviceWidth]}`}
               />
             </div>
           ) : (
             <div className="flex h-full items-center justify-center text-muted text-sm px-8 text-center">
               {streaming
-                ? "The agent is writing code — preview appears when it finishes."
-                : "Nothing here yet. Send a prompt to generate your app."}
+                ? t("builder.preview.emptyStreaming")
+                : t("builder.preview.emptyIdle")}
             </div>
           ))}
 
@@ -266,7 +268,7 @@ export function PreviewPanel({
             ref={codeRef}
             className="h-full overflow-auto p-4 font-mono text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words"
           >
-            {shownCode ?? "// No code yet — send a prompt to generate your app."}
+            {shownCode ?? t("builder.code.empty")}
             {streaming && <span className="text-accent animate-blink">▌</span>}
           </pre>
         )}
@@ -275,7 +277,7 @@ export function PreviewPanel({
           <div className="h-full overflow-y-auto p-4">
             {versions.length === 0 ? (
               <p className="text-sm text-muted text-center mt-8">
-                Versions appear here after your first generation.
+                {t("builder.versions.empty")}
               </p>
             ) : (
               <ul className="flex flex-col gap-2">
@@ -299,10 +301,14 @@ export function PreviewPanel({
                           <span className="text-sm font-medium">
                             v{v.number}
                             {isLatest && (
-                              <span className="ml-2 text-xs text-emerald-400">latest</span>
+                              <span className="ml-2 text-xs text-emerald-400">
+                                {t("builder.versions.latest")}
+                              </span>
                             )}
                             {publishedVersionId === v.id && (
-                              <span className="ml-2 text-xs text-accent-2">published</span>
+                              <span className="ml-2 text-xs text-accent-2">
+                                {t("builder.versions.published")}
+                              </span>
                             )}
                           </span>
                           <p className="text-xs text-muted truncate mt-0.5">

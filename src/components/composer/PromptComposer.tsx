@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n";
 import { ThemePicker } from "./ThemePicker";
 
 interface PromptComposerProps {
@@ -23,6 +24,7 @@ export function PromptComposer({
   autoFocus,
   compact,
 }: PromptComposerProps) {
+  const t = useT();
   const [input, setInput] = useState("");
 
   function submit() {
@@ -61,7 +63,7 @@ export function PromptComposer({
           type="button"
           onClick={submit}
           disabled={disabled || !input.trim()}
-          aria-label="Send prompt"
+          aria-label={t("composer.send")}
           className="w-9 h-9 rounded-full bg-foreground text-background grid place-items-center hover:opacity-85 transition-opacity disabled:opacity-30"
         >
           <svg

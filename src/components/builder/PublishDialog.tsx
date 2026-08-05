@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api, ApiError } from "@/lib/client/api";
+import { useT } from "@/lib/i18n";
 import type { BuilderProject } from "./types";
 
 interface PublishDialogProps {
@@ -21,6 +22,7 @@ export function PublishDialog({
   onPublished,
   onUnpublished,
 }: PublishDialogProps) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -44,7 +46,7 @@ export function PublishDialog({
       });
       onPublished(updated.slug, updated.publishedVersionId);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Publish failed");
+      setError(err instanceof ApiError ? err.message : t("builder.publish.failed"));
     } finally {
       setBusy(false);
     }
@@ -57,7 +59,9 @@ export function PublishDialog({
       await api(`/api/projects/${project.id}/publish`, { method: "DELETE" });
       onUnpublished();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Unpublish failed");
+      setError(
+        err instanceof ApiError ? err.message : t("builder.publish.unpublishFailed")
+      );
     } finally {
       setBusy(false);
     }
@@ -80,15 +84,19 @@ export function PublishDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-4">
-          <h2 className="text-lg font-semibold">Publish app</h2>
-          <button onClick={onClose} className="text-muted hover:text-foreground">
+          <h2 className="text-lg font-semibold">{t("builder.publish.title")}</h2>
+          <button
+            onClick={onClose}
+            aria-label={t("common.close")}
+            className="text-muted hover:text-foreground"
+          >
             ✕
           </button>
         </div>
 
         {isPublished && publicUrl ? (
           <div className="mb-5">
-            <p className="text-sm text-muted mb-2">Your app is live at:</p>
+            <p className="text-sm text-muted mb-2">{t("builder.publish.liveAt")}</p>
             <div className="flex items-center gap-2">
               <a
                 href={publicUrl}
@@ -102,15 +110,12 @@ export function PublishDialog({
                 onClick={copyUrl}
                 className="shrink-0 rounded-lg border border-line px-3 py-2 text-sm text-muted hover:text-foreground transition-colors"
               >
-                {copied ? "✓" : "Copy"}
+                {copied ? "✓" : t("builder.copy")}
               </button>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-muted mb-5">
-            Publishing makes this app available to anyone at a public URL. You
-            can unpublish or update it at any time.
-          </p>
+          <p className="text-sm text-muted mb-5">{t("builder.publish.explainer")}</p>
         )}
 
         {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
@@ -123,15 +128,15 @@ export function PublishDialog({
               className="rounded-lg bg-gradient-to-r from-accent to-accent-2 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {busy
-                ? "Working…"
+                ? t("builder.publish.working")
                 : isPublished
-                  ? `Update live app to v${targetVersionNumber}`
-                  : `Publish v${targetVersionNumber}`}
+                  ? t("builder.publish.update", { n: targetVersionNumber })
+                  : t("builder.publish.publishVersion", { n: targetVersionNumber })}
             </button>
           )}
           {isCurrentTargetLive && (
             <p className="text-center text-sm text-emerald-400 py-1.5">
-              v{targetVersionNumber} is live ✓
+              {t("builder.publish.versionLive", { n: targetVersionNumber })}
             </p>
           )}
           {isPublished && (
@@ -140,7 +145,7 @@ export function PublishDialog({
               disabled={busy}
               className="rounded-lg border border-line py-2.5 text-sm text-muted hover:text-red-400 hover:border-red-900 transition-colors disabled:opacity-50"
             >
-              Unpublish
+              {t("builder.publish.unpublish")}
             </button>
           )}
         </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/lib/i18n";
+
 interface OAuthButtonsProps {
   providers: string[];
 }
@@ -48,6 +50,7 @@ function isKnownProvider(value: string): value is KnownProvider {
 }
 
 export function OAuthButtons({ providers }: OAuthButtonsProps) {
+  const t = useT();
   const known = providers.filter(isKnownProvider);
   if (known.length === 0) return null;
 
@@ -55,7 +58,7 @@ export function OAuthButtons({ providers }: OAuthButtonsProps) {
     <div>
       <div className="flex items-center gap-3 my-5">
         <div className="h-px bg-line flex-1" />
-        <span className="text-xs text-muted">or continue with</span>
+        <span className="text-xs text-muted">{t("auth.orContinueWith")}</span>
         <div className="h-px bg-line flex-1" />
       </div>
       <div className="flex flex-col gap-2">
@@ -68,7 +71,7 @@ export function OAuthButtons({ providers }: OAuthButtonsProps) {
             className="w-full rounded-lg border border-line py-2.5 text-sm font-medium hover:bg-panel-2 transition-colors flex items-center justify-center gap-2"
           >
             {PROVIDER_META[provider].icon}
-            Continue with {PROVIDER_META[provider].label}
+            {t("auth.continueWith", { provider: PROVIDER_META[provider].label })}
           </a>
         ))}
       </div>

@@ -29,7 +29,8 @@ export async function POST(req: NextRequest) {
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  if (!user?.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
+    // Also covers OAuth-only accounts, which have no password to check.
     return NextResponse.json({ error: "Incorrect email or password" }, { status: 401 });
   }
 

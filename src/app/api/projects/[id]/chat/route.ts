@@ -5,6 +5,7 @@ import { buildGenerationMessages, getLlmClient, LLM_MODEL, type HistoryEntry } f
 import { GenerationParser } from "@/lib/stream-parser";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { getGenerationTheme } from "@/lib/themes";
+import { getBuiltinAgent } from "@/lib/agents";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
-  let body: { prompt?: string; themeName?: string | null };
+  let body: { prompt?: string; themeName?: string | null; agentId?: string | null };
   try {
     body = await req.json();
   } catch {
@@ -65,10 +66,14 @@ export async function POST(req: NextRequest, { params }: Params) {
       { status: 400 }
     );
   }
-  // themeName semantics: undefined = keep project's theme; "" = clear; id = set.
+  // themeName/agentId semantics: undefined = keep project's; "" = clear; id = set.
   const requestedTheme = body.themeName;
   if (typeof requestedTheme === "string" && requestedTheme !== "" && !getGenerationTheme(requestedTheme)) {
     return NextResponse.json({ error: "Unknown theme" }, { status: 400 });
+  }
+  const requestedAgent = body.agentId;
+  if (typeof requestedAgent === "string" && requestedAgent !== "" && !getBuiltinAgent(requestedAgent)) {
+    return NextResponse.json({ error: "Unknown agent" }, { status: 400 });
   }
 
   const project = await prisma.project.findFirst({
@@ -91,11 +96,15 @@ export async function POST(req: NextRequest, { params }: Params) {
   const effectiveThemeName =
     requestedTheme === undefined ? project.themeName : requestedTheme || null;
   const theme = getGenerationTheme(effectiveThemeName);
+  const effectiveAgentId =
+    requestedAgent === undefined ? project.agentId : requestedAgent || null;
+  const agent = getBuiltinAgent(effectiveAgentId);
   const messages = buildGenerationMessages({
     history,
     currentHtml: latestVersion?.html ?? null,
     prompt,
     theme,
+    agent,
   });
 
   // Aborts the upstream LLM call when the client disconnects (stream cancel
@@ -197,7 +206,11 @@ export async function POST(req: NextRequest, { params }: Params) {
           }),
           prisma.project.update({
             where: { id: projectId },
-            data: { updatedAt: new Date(), themeName: effectiveThemeName },
+            data: {
+              updatedAt: new Date(),
+              themeName: effectiveThemeName,
+              agentId: effectiveAgentId,
+            },
           }),
           prisma.user.update({
             where: { id: userId },

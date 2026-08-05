@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { ThemePicker } from "@/components/composer/ThemePicker";
 import { useT } from "@/lib/i18n";
@@ -26,6 +27,8 @@ interface ChatPanelProps {
   onThemeChange?: (id: string | null) => void;
   // Shows a persistent warning strip and disables sending
   outOfCredits?: boolean;
+  // Active built-in agent shown in the empty state
+  agent?: { name: string; avatar: string } | null;
 }
 
 function PlanTimeline({ steps, live }: { steps: string[]; live: boolean }) {
@@ -60,6 +63,7 @@ export function ChatPanel({
   themeValue,
   onThemeChange,
   outOfCredits,
+  agent,
 }: ChatPanelProps) {
   const t = useT();
   const [input, setInput] = useState("");
@@ -96,7 +100,19 @@ export function ChatPanel({
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
         {messages.length === 0 && !generating && (
           <div className="m-auto text-center text-muted max-w-xs">
-            <p className="text-3xl mb-3">🤖</p>
+            {agent ? (
+              <span className="relative mx-auto mb-3 block h-14 w-14 overflow-hidden rounded-full border border-line">
+                <Image
+                  src={agent.avatar}
+                  alt={agent.name}
+                  fill
+                  sizes="56px"
+                  className="object-cover"
+                />
+              </span>
+            ) : (
+              <p className="text-3xl mb-3">🤖</p>
+            )}
             <p className="text-sm leading-relaxed">{t("builder.chat.empty")}</p>
           </div>
         )}

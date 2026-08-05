@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { themePromptBlock, type GenerationTheme } from "./themes";
+import { agentPromptBlock, type BuiltinAgent } from "./agents";
 
 export const LLM_MODEL = process.env.LLM_MODEL ?? "deepseek-v4-flash";
 
@@ -54,11 +55,16 @@ export function buildGenerationMessages(params: {
   currentHtml: string | null;
   prompt: string;
   theme?: GenerationTheme | null;
+  agent?: BuiltinAgent | null;
 }): OpenAI.ChatCompletionMessageParam[] {
-  const { history, currentHtml, prompt, theme } = params;
-  const systemContent = theme
-    ? `${BUILDER_SYSTEM_PROMPT}\n\n${themePromptBlock(theme)}`
-    : BUILDER_SYSTEM_PROMPT;
+  const { history, currentHtml, prompt, theme, agent } = params;
+  const systemContent = [
+    BUILDER_SYSTEM_PROMPT,
+    agent ? agentPromptBlock(agent) : null,
+    theme ? themePromptBlock(theme) : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const finalUserContent = currentHtml
     ? `CURRENT APP CODE:\n${currentHtml}\n\nUSER REQUEST: ${prompt}`
     : `USER REQUEST: ${prompt}`;

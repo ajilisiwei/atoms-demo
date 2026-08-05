@@ -9,6 +9,7 @@ import { AppSidebar } from "@/components/shell/AppSidebar";
 import { SettingsDialog, type SettingsSection } from "@/components/shell/SettingsDialog";
 import { PromptComposer } from "@/components/composer/PromptComposer";
 import { ProjectsGrid, type ProjectListItem } from "@/components/ProjectsGrid";
+import { AgentRow } from "@/components/AgentRow";
 
 export const AUTORUN_PREFIX = "atomlet:autorun:";
 
@@ -35,13 +36,18 @@ export function DashboardClient({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("account");
   const [themeName, setThemeName] = useState<string | null>(null);
+  const [agentId, setAgentId] = useState<string | null>(null);
 
   function openSettings(section: SettingsSection = "account") {
     setSettingsSection(section);
     setSettingsOpen(true);
   }
 
-  async function createProject(initialPrompt?: string, theme?: string | null) {
+  async function createProject(
+    initialPrompt?: string,
+    theme?: string | null,
+    agent?: string | null
+  ) {
     if (creating) return;
     setCreating(true);
     setError(null);
@@ -54,7 +60,11 @@ export function DashboardClient({
       if (initialPrompt) {
         sessionStorage.setItem(
           `${AUTORUN_PREFIX}${project.id}`,
-          JSON.stringify({ prompt: initialPrompt, themeName: theme ?? null })
+          JSON.stringify({
+            prompt: initialPrompt,
+            themeName: theme ?? null,
+            agentId: agent ?? null,
+          })
         );
       }
       router.push(`/builder/${project.id}`);
@@ -133,7 +143,10 @@ export function DashboardClient({
           </button>
         </div>
 
-        <section className="flex flex-col items-center px-6 pt-12 sm:pt-20 pb-14 text-center">
+        <section className="flex flex-col items-center px-6 pt-10 sm:pt-16 pb-14 text-center">
+          <div className="mb-6">
+            <AgentRow value={agentId} onChange={setAgentId} disabled={creating} />
+          </div>
           <h1 className="font-display text-3xl sm:text-[44px] leading-tight tracking-tight">
             {t("dashboard.heroTitle", { name: displayName })}
           </h1>
@@ -143,7 +156,7 @@ export function DashboardClient({
               disabled={creating}
               themeValue={themeName}
               onThemeChange={setThemeName}
-              onSubmit={(p) => void createProject(p, themeName)}
+              onSubmit={(p) => void createProject(p, themeName, agentId)}
               autoFocus
             />
           </div>

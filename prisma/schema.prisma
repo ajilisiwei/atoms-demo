@@ -54,6 +54,8 @@ model Project {
   name               String
   // Generation theme id (see src/lib/themes.ts); null = no theme constraint
   themeName          String?
+  // Built-in agent persona id (see src/lib/agents.ts); null = default builder
+  agentId            String?
   // Set when the project is published; used as the public URL path /p/[slug]
   slug               String?      @unique
   publishedVersionId String?      @unique

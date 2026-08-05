@@ -1,9 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, streamGeneration, type VersionMeta } from "@/lib/client/api";
 import { AUTORUN_PREFIX } from "@/components/DashboardClient";
+import { getBuiltinAgent } from "@/lib/agents";
 import { useT } from "@/lib/i18n";
 import { ChatPanel, type RestoredInput } from "./ChatPanel";
 import { PreviewPanel, type PanelTab } from "./PreviewPanel";
@@ -40,6 +42,7 @@ export function Builder({
   const [restored, setRestored] = useState<RestoredInput>({ value: "", at: 0 });
   const [publishOpen, setPublishOpen] = useState(false);
   const [themeName, setThemeName] = useState<string | null>(initialProject.themeName);
+  const [agentId, setAgentId] = useState<string | null>(initialProject.agentId);
   const [credits, setCredits] = useState(initialCredits);
   // Not persisted — resets to expanded on reload.
   const [chatCollapsed, setChatCollapsed] = useState(false);
@@ -63,12 +66,17 @@ export function Builder({
   const hasVersions = versions.length > 0;
 
   const send = useCallback(
-    async (prompt: string, themeOverride?: string | null) => {
+    async (
+      prompt: string,
+      themeOverride?: string | null,
+      agentOverride?: string | null
+    ) => {
       if (generatingRef.current) return;
       generatingRef.current = true;
       const abort = new AbortController();
       abortRef.current = abort;
       const effectiveTheme = themeOverride !== undefined ? themeOverride : themeName;
+      const effectiveAgent = agentOverride !== undefined ? agentOverride : agentId;
       setError(null);
       setViewing(null);
       setViewingHtml(null);
@@ -134,7 +142,7 @@ export function Builder({
                 break;
             }
           },
-          { signal: abort.signal, themeName: effectiveTheme }
+          { signal: abort.signal, themeName: effectiveTheme, agentId: effectiveAgent }
         );
       } catch (err) {
         failure = abort.signal.aborted
@@ -156,7 +164,7 @@ export function Builder({
         setTab(hasVersions ? "preview" : "code");
       }
     },
-    [project.id, hasVersions, themeName, t]
+    [project.id, hasVersions, themeName, agentId, t]
   );
 
   // Auto-run the prompt carried over from the landing page / dashboard.
@@ -170,27 +178,31 @@ export function Builder({
     if (!raw) return;
     autoStarted.current = true;
     sessionStorage.removeItem(key);
-    // Payload is JSON {prompt, themeName} from the dashboard composer; a bare
-    // string is accepted for backward compatibility.
+    // Payload is JSON {prompt, themeName, agentId} from the dashboard
+    // composer; a bare string is accepted for backward compatibility.
     let prompt = raw;
     let theme: string | null | undefined;
+    let agent: string | null | undefined;
     try {
       const parsed: unknown = JSON.parse(raw);
       if (parsed && typeof parsed === "object" && "prompt" in parsed) {
-        const p = parsed as { prompt: unknown; themeName?: unknown };
+        const p = parsed as { prompt: unknown; themeName?: unknown; agentId?: unknown };
         if (typeof p.prompt === "string") {
           prompt = p.prompt;
           theme = typeof p.themeName === "string" ? p.themeName : null;
+          agent = typeof p.agentId === "string" ? p.agentId : null;
         }
       }
     } catch {
       // Bare-string payload — keep as-is.
     }
     const themeToApply = theme;
+    const agentToApply = agent;
     setTimeout(() => {
       if (!mountedRef.current) return;
       if (themeToApply !== undefined) setThemeName(themeToApply);
-      void send(prompt, themeToApply);
+      if (agentToApply !== undefined) setAgentId(agentToApply);
+      void send(prompt, themeToApply, agentToApply);
     }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -262,6 +274,7 @@ export function Builder({
     }
   }
 
+  const activeAgent = getBuiltinAgent(agentId);
   const latestVersion = versions[0] ?? null;
   const previewVersionId = viewing?.id ?? latestVersion?.id ?? null;
   const previewSrc = previewVersionId
@@ -291,7 +304,22 @@ export function Builder({
             <path d="m15 18-6-6 6-6" />
           </svg>
         </Link>
-        <span className="text-accent-2 font-semibold text-sm px-0.5">◉</span>
+        {activeAgent ? (
+          <span
+            className="relative w-7 h-7 shrink-0 overflow-hidden rounded-full border border-line"
+            title={`${activeAgent.name} · ${t(activeAgent.taglineKey)}`}
+          >
+            <Image
+              src={activeAgent.avatar}
+              alt={activeAgent.name}
+              fill
+              sizes="28px"
+              className="object-cover"
+            />
+          </span>
+        ) : (
+          <span className="text-accent-2 font-semibold text-sm px-0.5">◉</span>
+        )}
         <button
           type="button"
           onClick={() => setChatCollapsed((prev) => !prev)}
@@ -388,6 +416,11 @@ export function Builder({
             themeValue={themeName}
             onThemeChange={setThemeName}
             outOfCredits={credits <= 0}
+            agent={
+              activeAgent
+                ? { name: activeAgent.name, avatar: activeAgent.avatar }
+                : null
+            }
           />
         </div>
         <div className="flex-1 min-h-0">

@@ -14,6 +14,7 @@ export interface BuilderProject {
   slug: string | null;
   publishedVersionId: string | null;
   themeName: string | null;
+  agentId: string | null;
 }
 
 export interface GenerationState {

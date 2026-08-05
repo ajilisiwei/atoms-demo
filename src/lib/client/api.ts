@@ -46,8 +46,9 @@ export type GenerationEvent =
 
 export interface StreamGenerationOptions {
   signal?: AbortSignal;
-  // undefined = keep the project's stored theme; null = clear; id = set
+  // undefined = keep the project's stored value; null = clear; id = set
   themeName?: string | null;
+  agentId?: string | null;
 }
 
 export async function streamGeneration(
@@ -56,14 +57,13 @@ export async function streamGeneration(
   onEvent: (event: GenerationEvent) => void,
   opts: StreamGenerationOptions = {}
 ): Promise<void> {
+  const payload: Record<string, unknown> = { prompt };
+  if (opts.themeName !== undefined) payload.themeName = opts.themeName ?? "";
+  if (opts.agentId !== undefined) payload.agentId = opts.agentId ?? "";
   const res = await fetch(`/api/projects/${projectId}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(
-      opts.themeName === undefined
-        ? { prompt }
-        : { prompt, themeName: opts.themeName ?? "" }
-    ),
+    body: JSON.stringify(payload),
     signal: opts.signal,
   });
   if (!res.ok || !res.body) {

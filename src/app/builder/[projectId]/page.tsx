@@ -44,6 +44,7 @@ export default async function BuilderPage({
         slug: project.slug,
         publishedVersionId: project.publishedVersionId,
         themeName: project.themeName,
+        agentId: project.agentId,
       }}
       initialMessages={project.messages.map((m) => ({
         id: m.id,

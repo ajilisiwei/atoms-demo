@@ -35,6 +35,7 @@ export function Builder({
   const [error, setError] = useState<string | null>(null);
   const [restored, setRestored] = useState<RestoredInput>({ value: "", at: 0 });
   const [publishOpen, setPublishOpen] = useState(false);
+  const [themeName, setThemeName] = useState<string | null>(initialProject.themeName);
 
   const htmlBufRef = useRef("");
   const generatingRef = useRef(false);
@@ -55,11 +56,12 @@ export function Builder({
   const hasVersions = versions.length > 0;
 
   const send = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, themeOverride?: string | null) => {
       if (generatingRef.current) return;
       generatingRef.current = true;
       const abort = new AbortController();
       abortRef.current = abort;
+      const effectiveTheme = themeOverride !== undefined ? themeOverride : themeName;
       setError(null);
       setViewing(null);
       setViewingHtml(null);
@@ -95,6 +97,9 @@ export function Builder({
               case "summary":
                 setGeneration((g) => (g ? { ...g, phase: "finishing" } : g));
                 break;
+              case "suggestions":
+                // Carried on the done event as well; nothing to do mid-stream.
+                break;
               case "done": {
                 const html = htmlBufRef.current;
                 const stamp = Date.now();
@@ -106,6 +111,7 @@ export function Builder({
                     role: "assistant",
                     content: ev.summary,
                     planSteps: ev.planSteps.length > 0 ? ev.planSteps : null,
+                    suggestions: ev.suggestions?.length ? ev.suggestions : null,
                   },
                 ]);
                 setVersions((prev) => [ev.version, ...prev]);
@@ -118,7 +124,7 @@ export function Builder({
                 break;
             }
           },
-          abort.signal
+          { signal: abort.signal, themeName: effectiveTheme }
         );
       } catch (err) {
         failure = abort.signal.aborted
@@ -140,7 +146,7 @@ export function Builder({
         setTab(hasVersions ? "preview" : "code");
       }
     },
-    [project.id, hasVersions]
+    [project.id, hasVersions, themeName]
   );
 
   // Auto-run the prompt carried over from the landing page / dashboard.
@@ -150,12 +156,31 @@ export function Builder({
   useEffect(() => {
     if (autoStarted.current) return;
     const key = `${AUTORUN_PREFIX}${project.id}`;
-    const pending = sessionStorage.getItem(key);
-    if (!pending) return;
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return;
     autoStarted.current = true;
     sessionStorage.removeItem(key);
+    // Payload is JSON {prompt, themeName} from the dashboard composer; a bare
+    // string is accepted for backward compatibility.
+    let prompt = raw;
+    let theme: string | null | undefined;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && "prompt" in parsed) {
+        const p = parsed as { prompt: unknown; themeName?: unknown };
+        if (typeof p.prompt === "string") {
+          prompt = p.prompt;
+          theme = typeof p.themeName === "string" ? p.themeName : null;
+        }
+      }
+    } catch {
+      // Bare-string payload — keep as-is.
+    }
+    const themeToApply = theme;
     setTimeout(() => {
-      if (mountedRef.current) void send(pending);
+      if (!mountedRef.current) return;
+      if (themeToApply !== undefined) setThemeName(themeToApply);
+      void send(prompt, themeToApply);
     }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -274,6 +299,9 @@ export function Builder({
             restored={restored}
             onSend={(p) => void send(p)}
             onDismissError={() => setError(null)}
+            onSuggestion={(text) => void send(text)}
+            themeValue={themeName}
+            onThemeChange={setThemeName}
           />
         </div>
         <div className="flex-1 min-h-0">

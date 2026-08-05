@@ -32,20 +32,37 @@ export type GenerationEvent =
   | { type: "plan_step"; text: string }
   | { type: "html_delta"; delta: string }
   | { type: "summary"; text: string }
-  | { type: "done"; version: VersionMeta; summary: string; planSteps: string[] }
+  | { type: "suggestions"; items: string[] }
+  | {
+      type: "done";
+      version: VersionMeta;
+      summary: string;
+      planSteps: string[];
+      suggestions?: string[];
+    }
   | { type: "error"; message: string };
+
+export interface StreamGenerationOptions {
+  signal?: AbortSignal;
+  // undefined = keep the project's stored theme; null = clear; id = set
+  themeName?: string | null;
+}
 
 export async function streamGeneration(
   projectId: string,
   prompt: string,
   onEvent: (event: GenerationEvent) => void,
-  signal?: AbortSignal
+  opts: StreamGenerationOptions = {}
 ): Promise<void> {
   const res = await fetch(`/api/projects/${projectId}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
-    signal,
+    body: JSON.stringify(
+      opts.themeName === undefined
+        ? { prompt }
+        : { prompt, themeName: opts.themeName ?? "" }
+    ),
+    signal: opts.signal,
   });
   if (!res.ok || !res.body) {
     const data: { error?: string } = await res.json().catch(() => ({}));

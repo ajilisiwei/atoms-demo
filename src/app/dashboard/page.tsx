@@ -22,9 +22,12 @@ export default async function DashboardPage() {
     },
   });
 
+  const firstName = user.email.split("@")[0];
+
   return (
     <DashboardClient
       userEmail={user.email}
+      displayName={firstName}
       initialProjects={projects.map((p) => ({
         id: p.id,
         name: p.name,

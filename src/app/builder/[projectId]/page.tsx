@@ -41,12 +41,14 @@ export default async function BuilderPage({
         name: project.name,
         slug: project.slug,
         publishedVersionId: project.publishedVersionId,
+        themeName: project.themeName,
       }}
       initialMessages={project.messages.map((m) => ({
         id: m.id,
         role: m.role as "user" | "assistant",
         content: m.content,
         planSteps: Array.isArray(m.planSteps) ? (m.planSteps as string[]) : null,
+        suggestions: Array.isArray(m.suggestions) ? (m.suggestions as string[]) : null,
       }))}
       initialVersions={project.versions.map((v) => ({
         id: v.id,

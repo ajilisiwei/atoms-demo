@@ -3,6 +3,9 @@ export interface UiMessage {
   role: "user" | "assistant";
   content: string;
   planSteps: string[] | null;
+  // Follow-up prompts rendered as chips under the latest assistant message.
+  // Optional so existing message constructors stay valid.
+  suggestions?: string[] | null;
 }
 
 export interface BuilderProject {
@@ -10,6 +13,7 @@ export interface BuilderProject {
   name: string;
   slug: string | null;
   publishedVersionId: string | null;
+  themeName: string | null;
 }
 
 export interface GenerationState {

@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/client/api";
 import { PENDING_PROMPT_KEY } from "@/components/HeroPrompt";
+import { AppSidebar } from "@/components/shell/AppSidebar";
+import { SettingsDialog } from "@/components/shell/SettingsDialog";
+import { PromptComposer } from "@/components/composer/PromptComposer";
 
 export const AUTORUN_PREFIX = "atomlet:autorun:";
 
@@ -19,6 +22,7 @@ export interface ProjectListItem {
 
 interface DashboardClientProps {
   userEmail: string;
+  displayName: string;
   initialProjects: ProjectListItem[];
 }
 
@@ -32,12 +36,17 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function DashboardClient({ userEmail, initialProjects }: DashboardClientProps) {
+export function DashboardClient({
+  userEmail,
+  displayName,
+  initialProjects,
+}: DashboardClientProps) {
   const router = useRouter();
   const [projects, setProjects] = useState(initialProjects);
-  const [prompt, setPrompt] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [themeName, setThemeName] = useState<string | null>(null);
   const autoStarted = useRef(false);
   const mountedRef = useRef(true);
 
@@ -48,7 +57,7 @@ export function DashboardClient({ userEmail, initialProjects }: DashboardClientP
     };
   }, []);
 
-  async function createProject(initialPrompt?: string) {
+  async function createProject(initialPrompt?: string, theme?: string | null) {
     if (creating) return;
     setCreating(true);
     setError(null);
@@ -59,7 +68,10 @@ export function DashboardClient({ userEmail, initialProjects }: DashboardClientP
         body: JSON.stringify({ name }),
       });
       if (initialPrompt) {
-        sessionStorage.setItem(`${AUTORUN_PREFIX}${project.id}`, initialPrompt);
+        sessionStorage.setItem(
+          `${AUTORUN_PREFIX}${project.id}`,
+          JSON.stringify({ prompt: initialPrompt, themeName: theme ?? null })
+        );
       }
       router.push(`/builder/${project.id}`);
     } catch (err) {
@@ -68,11 +80,11 @@ export function DashboardClient({ userEmail, initialProjects }: DashboardClientP
     }
   }
 
-  // If the user typed a prompt on the landing page before signing up,
-  // pick it up here and jump straight into the builder. Deferred via
-  // setTimeout so no state updates happen synchronously inside the effect;
-  // no cleanup on purpose — clearing the timer would drop the autorun under
-  // Strict Mode's remount, so the mountedRef guards instead.
+  // If the user typed a prompt on the landing page before signing up, pick it
+  // up and jump straight into the builder. Deferred via setTimeout so no state
+  // updates happen synchronously inside the effect; no cleanup on purpose —
+  // clearing the timer would drop the autorun under Strict Mode's remount,
+  // so the mountedRef guards instead.
   useEffect(() => {
     if (autoStarted.current) return;
     const pending = sessionStorage.getItem(PENDING_PROMPT_KEY);
@@ -105,122 +117,123 @@ export function DashboardClient({ userEmail, initialProjects }: DashboardClientP
   }
 
   return (
-    <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-8">
-      <header className="flex items-center justify-between mb-10">
-        <Link href="/" className="text-lg font-semibold">
-          <span className="text-gradient">◉ Atomlet</span>
-        </Link>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-muted hidden sm:inline">{userEmail}</span>
-          <button
-            onClick={logout}
-            className="text-muted hover:text-foreground transition-colors"
-          >
-            Log out
-          </button>
-        </div>
-      </header>
+    <div className="flex h-dvh overflow-hidden bg-background">
+      <div className="hidden lg:flex">
+        <AppSidebar
+          userEmail={userEmail}
+          projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onLogout={() => void logout()}
+        />
+      </div>
 
-      <section className="mb-12">
-        <h1 className="text-2xl font-semibold mb-1">What do you want to build?</h1>
-        <p className="text-muted mb-5">
-          Describe an app and the agent will plan, code and preview it for you.
-        </p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (prompt.trim()) void createProject(prompt.trim());
-          }}
-          className="flex flex-col sm:flex-row gap-3 p-2 rounded-2xl bg-panel border border-line"
-        >
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (prompt.trim()) void createProject(prompt.trim());
-              }
-            }}
-            rows={2}
-            placeholder="e.g. A habit tracker with streaks and weekly charts…"
-            className="flex-1 resize-none bg-transparent px-4 py-3 outline-none placeholder:text-muted"
-          />
+      <main className="flex-1 min-w-0 overflow-y-auto">
+        {/* Mobile top bar (sidebar hidden below lg) */}
+        <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-line">
+          <Link href="/" className="text-sm font-semibold">
+            <span className="text-accent-2">◉</span> Atomlet
+          </Link>
           <button
-            type="submit"
-            disabled={creating || !prompt.trim()}
-            className="shrink-0 self-stretch sm:self-end rounded-xl bg-gradient-to-r from-accent to-accent-2 px-6 py-3 font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-40"
+            onClick={() => setSettingsOpen(true)}
+            className="text-sm text-muted hover:text-foreground"
           >
-            {creating ? "Creating…" : "Start building"}
+            Settings
           </button>
-        </form>
-        {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
-      </section>
+        </header>
 
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-muted uppercase tracking-wide text-xs">
-            Your apps ({projects.length})
-          </h2>
-          <button
-            onClick={() => void createProject()}
-            className="text-sm text-accent-2 hover:underline"
-            disabled={creating}
-          >
-            + Blank project
-          </button>
-        </div>
-
-        {projects.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-line p-12 text-center text-muted">
-            No apps yet — describe one above to get started.
+        <section className="flex flex-col items-center px-6 pt-20 sm:pt-28 pb-14 text-center">
+          <h1 className="font-display text-3xl sm:text-[44px] leading-tight tracking-tight">
+            What will you create, {displayName}?
+          </h1>
+          <div className="mt-9 w-full max-w-2xl text-left">
+            <PromptComposer
+              placeholder="Describe the app you want to build…"
+              disabled={creating}
+              themeValue={themeName}
+              onThemeChange={setThemeName}
+              onSubmit={(p) => void createProject(p, themeName)}
+              autoFocus
+            />
           </div>
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {projects.map((p) => (
-              <li
-                key={p.id}
-                className="group rounded-2xl border border-line bg-panel p-5 hover:border-accent/50 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <Link href={`/builder/${p.id}`} className="flex-1 min-w-0">
-                    <h3 className="font-medium truncate group-hover:text-accent-2 transition-colors">
-                      {p.name}
-                    </h3>
-                    <p className="text-sm text-muted mt-1">
-                      {p.versionCount} version{p.versionCount === 1 ? "" : "s"} ·{" "}
-                      {timeAgo(p.updatedAt)}
-                    </p>
-                  </Link>
-                  <button
-                    onClick={() => void deleteProject(p.id)}
-                    title="Delete project"
-                    className="opacity-0 group-hover:opacity-100 text-muted hover:text-red-400 transition-all text-sm"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="mt-3 flex items-center gap-2 text-xs">
-                  {p.published && p.slug ? (
-                    <a
-                      href={`/p/${p.slug}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-900 px-2.5 py-1 hover:bg-emerald-950 transition-colors"
+          {creating && (
+            <p className="mt-4 text-sm text-muted">Creating your project…</p>
+          )}
+          {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
+        </section>
+
+        <section id="apps" className="mx-auto w-full max-w-5xl px-6 pb-20">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-medium">
+              My apps
+              <span className="ml-1.5 text-muted">({projects.length})</span>
+            </h2>
+            <button
+              onClick={() => void createProject()}
+              className="text-sm text-accent-2 hover:underline"
+              disabled={creating}
+            >
+              + Blank project
+            </button>
+          </div>
+
+          {projects.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-line p-12 text-center text-muted text-sm">
+              No apps yet — describe one above to get started.
+            </div>
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {projects.map((p) => (
+                <li
+                  key={p.id}
+                  className="group rounded-2xl border border-line bg-panel p-5 hover:border-accent-2/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <Link href={`/builder/${p.id}`} className="flex-1 min-w-0">
+                      <h3 className="text-sm font-medium truncate group-hover:text-accent-2 transition-colors">
+                        {p.name}
+                      </h3>
+                      <p className="text-xs text-muted mt-1">
+                        {p.versionCount} version{p.versionCount === 1 ? "" : "s"} ·{" "}
+                        {timeAgo(p.updatedAt)}
+                      </p>
+                    </Link>
+                    <button
+                      onClick={() => void deleteProject(p.id)}
+                      title="Delete project"
+                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-red-500 transition-all text-sm"
                     >
-                      ● Live
-                    </a>
-                  ) : (
-                    <span className="rounded-full bg-panel-2 text-muted border border-line px-2.5 py-1">
-                      Draft
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </main>
+                      ✕
+                    </button>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 text-xs">
+                    {p.published && p.slug ? (
+                      <a
+                        href={`/p/${p.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 px-2.5 py-1 hover:bg-emerald-100 transition-colors dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900"
+                      >
+                        ● Live
+                      </a>
+                    ) : (
+                      <span className="rounded-full bg-panel-2 text-muted border border-line px-2.5 py-1">
+                        Draft
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </main>
+
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        userEmail={userEmail}
+        onLogout={() => void logout()}
+      />
+    </div>
   );
 }

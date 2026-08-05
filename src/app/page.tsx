@@ -60,7 +60,7 @@ export default async function LandingPage() {
         <p className="mb-4 text-sm text-muted border border-line rounded-full px-4 py-1.5">
           AI Agent · Code Generation · Live Preview
         </p>
-        <h1 className="text-4xl sm:text-6xl font-bold tracking-tight max-w-3xl leading-tight">
+        <h1 className="font-display text-4xl sm:text-6xl tracking-tight max-w-3xl leading-tight">
           Describe it.
           <br />
           <span className="text-gradient">Watch it become an app.</span>

@@ -4,16 +4,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/client/api";
+import { OAuthButtons } from "@/components/OAuthButtons";
 
 interface AuthFormProps {
   mode: "login" | "register";
+  oauthProviders?: string[];
+  initialError?: string | null;
 }
 
-export function AuthForm({ mode }: AuthFormProps) {
+export function AuthForm({ mode, oauthProviders, initialError }: AuthFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
   const [submitting, setSubmitting] = useState(false);
 
   const isRegister = mode === "register";
@@ -84,11 +87,12 @@ export function AuthForm({ mode }: AuthFormProps) {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-2 rounded-lg bg-gradient-to-r from-accent to-accent-2 py-2.5 font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="mt-2 rounded-lg bg-foreground py-2.5 font-medium text-background hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {submitting ? "Please wait…" : isRegister ? "Create account" : "Log in"}
             </button>
           </form>
+          <OAuthButtons providers={oauthProviders ?? []} />
         </div>
         <p className="text-center text-sm text-muted mt-6">
           {isRegister ? (

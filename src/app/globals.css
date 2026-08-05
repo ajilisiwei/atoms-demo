@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Make Tailwind's dark: variant follow our appearance attribute */
+@custom-variant dark (&:where([data-appearance="dark"], [data-appearance="dark"] *));
+
 /* Atoms-style palette. Light is the default appearance; the inline script in
    layout.tsx sets html[data-appearance] before paint, so there is no flash. */
 :root,

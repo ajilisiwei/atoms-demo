@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ThemePicker } from "@/components/composer/ThemePicker";
 import type { GenerationState, UiMessage } from "./types";
 
 export interface RestoredInput {
@@ -17,6 +18,11 @@ interface ChatPanelProps {
   restored: RestoredInput;
   onSend: (prompt: string) => void;
   onDismissError: () => void;
+  // Optional until the Builder integration wires it up.
+  onSuggestion?: (text: string) => void;
+  // Generation theme controls (rendered in the input row when provided)
+  themeValue?: string | null;
+  onThemeChange?: (id: string | null) => void;
 }
 
 function PlanTimeline({ steps, live }: { steps: string[]; live: boolean }) {
@@ -47,11 +53,19 @@ export function ChatPanel({
   restored,
   onSend,
   onDismissError,
+  onSuggestion,
+  themeValue,
+  onThemeChange,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [lastRestoredAt, setLastRestoredAt] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const generating = generation !== null;
+  // Suggestion chips only render under the newest assistant message.
+  const lastAssistantId = messages.reduce<string | null>(
+    (acc, m) => (m.role === "assistant" ? m.id : acc),
+    null
+  );
 
   // Adjust state during render when the prop changes (React's documented
   // alternative to syncing props via useEffect).
@@ -87,23 +101,42 @@ export function ChatPanel({
         {messages.map((m) =>
           m.role === "user" ? (
             <div key={m.id} className="self-end max-w-[85%]">
-              <div className="rounded-2xl rounded-br-md bg-gradient-to-r from-accent/90 to-accent-2/90 px-4 py-2.5 text-sm text-white whitespace-pre-wrap">
+              <div className="rounded-2xl rounded-br-md bg-panel-2 px-4 py-2.5 text-sm text-foreground whitespace-pre-wrap">
                 {m.content}
               </div>
             </div>
           ) : (
-            <div key={m.id} className="self-start max-w-[92%] w-full">
-              <div className="rounded-2xl rounded-bl-md bg-panel-2 border border-line px-4 py-3">
-                <p className="text-sm whitespace-pre-wrap">{m.content}</p>
-                {m.planSteps && m.planSteps.length > 0 && (
-                  <details className="mt-2">
-                    <summary className="text-xs text-muted cursor-pointer select-none hover:text-foreground">
-                      Build plan ({m.planSteps.length} steps)
-                    </summary>
-                    <PlanTimeline steps={m.planSteps} live={false} />
-                  </details>
+            <div key={m.id} className="self-start max-w-[92%] w-full px-1 py-0.5">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
+              {m.planSteps && m.planSteps.length > 0 && (
+                <details className="mt-2">
+                  <summary className="text-xs text-muted cursor-pointer select-none hover:text-foreground">
+                    Build plan ({m.planSteps.length} steps)
+                  </summary>
+                  <PlanTimeline steps={m.planSteps} live={false} />
+                </details>
+              )}
+              {m.id === lastAssistantId &&
+                m.suggestions &&
+                m.suggestions.length > 0 && (
+                  <div
+                    className={`mt-3 flex flex-wrap gap-2 ${
+                      generating ? "opacity-50 pointer-events-none" : ""
+                    }`}
+                  >
+                    {m.suggestions.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        disabled={generating}
+                        onClick={() => onSuggestion?.(s)}
+                        className="rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-muted hover:text-foreground hover:border-accent-2/60 transition-colors"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 )}
-              </div>
             </div>
           )
         )}
@@ -127,9 +160,9 @@ export function ChatPanel({
         )}
 
         {error && (
-          <div className="self-stretch rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300 flex items-start justify-between gap-3">
+          <div className="self-stretch rounded-xl border border-line bg-panel-2 px-4 py-3 text-sm text-red-400 flex items-start justify-between gap-3">
             <span>{error}</span>
-            <button onClick={onDismissError} className="shrink-0 hover:text-red-100">
+            <button onClick={onDismissError} className="shrink-0 hover:text-foreground">
               ✕
             </button>
           </div>
@@ -143,7 +176,7 @@ export function ChatPanel({
             e.preventDefault();
             submit();
           }}
-          className="flex items-end gap-2 rounded-xl bg-panel-2 border border-line p-2 focus-within:border-accent/60 transition-colors"
+          className="rounded-xl bg-panel border border-line p-2 focus-within:border-accent-2/50 transition-colors"
         >
           <textarea
             value={input}
@@ -161,15 +194,40 @@ export function ChatPanel({
                 ? "Describe your app… (Enter to send)"
                 : "Describe a change… (Enter to send)"
             }
-            className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted disabled:opacity-50"
+            className="w-full resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted disabled:opacity-50"
           />
-          <button
-            type="submit"
-            disabled={generating || !input.trim()}
-            className="rounded-lg bg-gradient-to-r from-accent to-accent-2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-40"
-          >
-            {generating ? "Building…" : "Send"}
-          </button>
+          <div className="flex items-center justify-between px-0.5 pb-0.5">
+            {onThemeChange ? (
+              <ThemePicker
+                value={themeValue ?? null}
+                onChange={onThemeChange}
+                disabled={generating}
+              />
+            ) : (
+              <span />
+            )}
+            <button
+              type="submit"
+              disabled={generating || !input.trim()}
+              aria-label="Send"
+              className="w-9 h-9 rounded-full bg-foreground text-background grid place-items-center hover:opacity-85 transition-opacity disabled:opacity-30"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 19V5" />
+                <path d="m5 12 7-7 7 7" />
+              </svg>
+            </button>
+          </div>
         </form>
       </div>
     </div>

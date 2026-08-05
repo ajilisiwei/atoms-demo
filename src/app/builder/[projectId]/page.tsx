@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { getSessionUserId } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { Builder } from "@/components/builder/Builder";
 
@@ -10,8 +10,9 @@ export default async function BuilderPage({
 }: {
   params: Promise<{ projectId: string }>;
 }) {
-  const userId = await getSessionUserId();
-  if (!userId) redirect("/login");
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+  const userId = user.id;
   const { projectId } = await params;
 
   const project = await prisma.project.findFirst({
@@ -36,6 +37,7 @@ export default async function BuilderPage({
 
   return (
     <Builder
+      initialCredits={user.credits}
       initialProject={{
         id: project.id,
         name: project.name,

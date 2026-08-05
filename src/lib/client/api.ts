@@ -39,6 +39,8 @@ export type GenerationEvent =
       summary: string;
       planSteps: string[];
       suggestions?: string[];
+      creditsSpent?: number;
+      creditsRemaining?: number;
     }
   | { type: "error"; message: string };
 

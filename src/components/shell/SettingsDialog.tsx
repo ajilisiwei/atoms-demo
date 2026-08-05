@@ -6,21 +6,43 @@ import {
   useAppearance,
   type Appearance,
 } from "@/components/appearance/AppearanceProvider";
+import { api, ApiError } from "@/lib/client/api";
 
-type SettingsSection = "account" | "appearance" | "model";
+export type SettingsSection = "account" | "appearance" | "model" | "credits";
 
 interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
   userEmail: string;
   onLogout: () => void;
+  // Section shown when the dialog opens (e.g. the credits pill deep-links here)
+  initialSection?: SettingsSection;
 }
 
 const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "account", label: "Account" },
+  { id: "credits", label: "Credits" },
   { id: "appearance", label: "Appearance" },
   { id: "model", label: "Model" },
 ];
+
+interface LedgerEntry {
+  id: string;
+  delta: number;
+  tokens: number | null;
+  reason: string;
+  createdAt: string;
+}
+
+interface CreditsData {
+  credits: number;
+  ledger: LedgerEntry[];
+}
+
+const LEDGER_LABELS: Record<string, string> = {
+  generation: "App generation",
+  signup_grant: "Welcome grant",
+};
 
 // Hex values here are tiny decorative theme-preview swatches; they must not
 // follow the appearance tokens, since each swatch previews a fixed theme.
@@ -63,9 +85,39 @@ export function SettingsDialog({
   onClose,
   userEmail,
   onLogout,
+  initialSection = "account",
 }: SettingsDialogProps) {
-  const [section, setSection] = useState<SettingsSection>("account");
+  const [section, setSection] = useState<SettingsSection>(initialSection);
   const { appearance, setAppearance } = useAppearance();
+  const [creditsData, setCreditsData] = useState<CreditsData | null>(null);
+  const [creditsError, setCreditsError] = useState<string | null>(null);
+  // Adjust state during render when the prop changes (each open may deep-link
+  // to a different section).
+  const [lastOpen, setLastOpen] = useState(open);
+  if (open !== lastOpen) {
+    setLastOpen(open);
+    if (open) {
+      setSection(initialSection);
+      setCreditsData(null);
+      setCreditsError(null);
+    }
+  }
+
+  async function loadCredits() {
+    setCreditsError(null);
+    try {
+      setCreditsData(await api<CreditsData>("/api/credits"));
+    } catch (err) {
+      setCreditsError(
+        err instanceof ApiError ? err.message : "Failed to load credits"
+      );
+    }
+  }
+
+  function selectSection(next: SettingsSection) {
+    setSection(next);
+    if (next === "credits" && !creditsData) void loadCredits();
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -75,6 +127,15 @@ export function SettingsDialog({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
+
+  // Deep-linking straight to Credits needs its data fetched on open too;
+  // deferred so no state updates run synchronously inside the effect.
+  useEffect(() => {
+    if (!open || initialSection !== "credits") return;
+    const t = setTimeout(() => void loadCredits(), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialSection]);
 
   if (!open) return null;
 
@@ -103,7 +164,7 @@ export function SettingsDialog({
             {SECTIONS.map((s) => (
               <li key={s.id}>
                 <button
-                  onClick={() => setSection(s.id)}
+                  onClick={() => selectSection(s.id)}
                   className={`w-full text-left rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors ${
                     section === s.id
                       ? "bg-panel-2 font-medium"
@@ -136,6 +197,82 @@ export function SettingsDialog({
               >
                 Log out
               </button>
+            </section>
+          )}
+
+          {section === "credits" && (
+            <section>
+              <h3 className="text-base font-semibold mb-4">Credits</h3>
+              {creditsError && (
+                <p className="mb-3 text-sm text-red-500">{creditsError}</p>
+              )}
+              {creditsData ? (
+                <>
+                  <div className="rounded-xl border border-line p-4">
+                    <p className="text-xs text-muted mb-1">Balance</p>
+                    <p
+                      className={`text-3xl font-semibold ${
+                        creditsData.credits <= 0 ? "text-red-500" : ""
+                      }`}
+                    >
+                      {creditsData.credits}
+                      <span className="ml-1.5 text-sm font-normal text-muted">
+                        credits
+                      </span>
+                    </p>
+                    {creditsData.credits <= 0 && (
+                      <p className="mt-2 text-sm text-red-500">
+                        You&apos;re out of credits — app generation is paused.
+                      </p>
+                    )}
+                  </div>
+                  <p className="mt-3 text-xs text-muted leading-relaxed">
+                    1 credit covers ~1,000 LLM tokens of generation. Every new
+                    account starts with 1,000 free credits.
+                  </p>
+                  {creditsData.ledger.length > 0 && (
+                    <div className="mt-5">
+                      <p className="text-xs text-muted uppercase tracking-wide mb-2">
+                        Recent activity
+                      </p>
+                      <ul className="rounded-xl border border-line divide-y divide-line">
+                        {creditsData.ledger.map((entry) => (
+                          <li
+                            key={entry.id}
+                            className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate">
+                                {LEDGER_LABELS[entry.reason] ?? entry.reason}
+                              </p>
+                              <p className="text-xs text-muted">
+                                {new Date(entry.createdAt).toLocaleString([], {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                                {entry.tokens
+                                  ? ` · ${entry.tokens.toLocaleString()} tokens`
+                                  : ""}
+                              </p>
+                            </div>
+                            <span
+                              className={`shrink-0 font-medium ${
+                                entry.delta < 0 ? "" : "text-emerald-500"
+                              }`}
+                            >
+                              {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              ) : (
+                !creditsError && <p className="text-sm text-muted">Loading…</p>
+              )}
             </section>
           )}
 

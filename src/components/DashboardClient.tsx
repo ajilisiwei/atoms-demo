@@ -6,39 +6,25 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/client/api";
 import { PENDING_PROMPT_KEY } from "@/components/HeroPrompt";
 import { AppSidebar } from "@/components/shell/AppSidebar";
-import { SettingsDialog } from "@/components/shell/SettingsDialog";
+import { SettingsDialog, type SettingsSection } from "@/components/shell/SettingsDialog";
 import { PromptComposer } from "@/components/composer/PromptComposer";
+import { ProjectsGrid, type ProjectListItem } from "@/components/ProjectsGrid";
 
 export const AUTORUN_PREFIX = "atomlet:autorun:";
 
-export interface ProjectListItem {
-  id: string;
-  name: string;
-  slug: string | null;
-  published: boolean;
-  versionCount: number;
-  updatedAt: string;
-}
+export type { ProjectListItem };
 
 interface DashboardClientProps {
   userEmail: string;
   displayName: string;
+  credits: number;
   initialProjects: ProjectListItem[];
-}
-
-function timeAgo(iso: string): string {
-  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
 }
 
 export function DashboardClient({
   userEmail,
   displayName,
+  credits,
   initialProjects,
 }: DashboardClientProps) {
   const router = useRouter();
@@ -46,6 +32,7 @@ export function DashboardClient({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("account");
   const [themeName, setThemeName] = useState<string | null>(null);
   const autoStarted = useRef(false);
   const mountedRef = useRef(true);
@@ -56,6 +43,11 @@ export function DashboardClient({
       mountedRef.current = false;
     };
   }, []);
+
+  function openSettings(section: SettingsSection = "account") {
+    setSettingsSection(section);
+    setSettingsOpen(true);
+  }
 
   async function createProject(initialPrompt?: string, theme?: string | null) {
     if (creating) return;
@@ -122,7 +114,8 @@ export function DashboardClient({
         <AppSidebar
           userEmail={userEmail}
           projects={projects.map((p) => ({ id: p.id, name: p.name }))}
-          onOpenSettings={() => setSettingsOpen(true)}
+          activeNav="home"
+          onOpenSettings={() => openSettings()}
           onLogout={() => void logout()}
         />
       </div>
@@ -134,14 +127,39 @@ export function DashboardClient({
             <span className="text-accent-2">◉</span> Atomlet
           </Link>
           <button
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => openSettings()}
             className="text-sm text-muted hover:text-foreground"
           >
             Settings
           </button>
         </header>
 
-        <section className="flex flex-col items-center px-6 pt-20 sm:pt-28 pb-14 text-center">
+        {/* Credits pill, mirroring Atoms' top-right balance */}
+        <div className="hidden lg:flex justify-end px-6 pt-5">
+          <button
+            onClick={() => openSettings("credits")}
+            title="Credits — open details"
+            className="flex items-center gap-1.5 rounded-full border border-line bg-panel px-3.5 py-1.5 text-sm hover:border-accent-2/60 transition-colors"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              className="text-muted"
+            >
+              <path d="M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3-4.8-2.5-4.8 2.5.9-5.3L4.3 7.6l5.3-.8z" />
+            </svg>
+            {credits}
+          </button>
+        </div>
+
+        <section className="flex flex-col items-center px-6 pt-12 sm:pt-20 pb-14 text-center">
           <h1 className="font-display text-3xl sm:text-[44px] leading-tight tracking-tight">
             What will you create, {displayName}?
           </h1>
@@ -175,61 +193,17 @@ export function DashboardClient({
               + Blank project
             </button>
           </div>
-
-          {projects.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-line p-12 text-center text-muted text-sm">
-              No apps yet — describe one above to get started.
-            </div>
-          ) : (
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {projects.map((p) => (
-                <li
-                  key={p.id}
-                  className="group rounded-2xl border border-line bg-panel p-5 hover:border-accent-2/50 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <Link href={`/builder/${p.id}`} className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium truncate group-hover:text-accent-2 transition-colors">
-                        {p.name}
-                      </h3>
-                      <p className="text-xs text-muted mt-1">
-                        {p.versionCount} version{p.versionCount === 1 ? "" : "s"} ·{" "}
-                        {timeAgo(p.updatedAt)}
-                      </p>
-                    </Link>
-                    <button
-                      onClick={() => void deleteProject(p.id)}
-                      title="Delete project"
-                      className="opacity-0 group-hover:opacity-100 text-muted hover:text-red-500 transition-all text-sm"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="mt-3 flex items-center gap-2 text-xs">
-                    {p.published && p.slug ? (
-                      <a
-                        href={`/p/${p.slug}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 px-2.5 py-1 hover:bg-emerald-100 transition-colors dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900"
-                      >
-                        ● Live
-                      </a>
-                    ) : (
-                      <span className="rounded-full bg-panel-2 text-muted border border-line px-2.5 py-1">
-                        Draft
-                      </span>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <ProjectsGrid
+            projects={projects}
+            onDelete={(id) => void deleteProject(id)}
+            emptyHint="No apps yet — describe one above to get started."
+          />
         </section>
       </main>
 
       <SettingsDialog
         open={settingsOpen}
+        initialSection={settingsSection}
         onClose={() => setSettingsOpen(false)}
         userEmail={userEmail}
         onLogout={() => void logout()}

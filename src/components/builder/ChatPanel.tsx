@@ -23,6 +23,8 @@ interface ChatPanelProps {
   // Generation theme controls (rendered in the input row when provided)
   themeValue?: string | null;
   onThemeChange?: (id: string | null) => void;
+  // Shows a persistent warning strip and disables sending
+  outOfCredits?: boolean;
 }
 
 function PlanTimeline({ steps, live }: { steps: string[]; live: boolean }) {
@@ -56,11 +58,13 @@ export function ChatPanel({
   onSuggestion,
   themeValue,
   onThemeChange,
+  outOfCredits,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [lastRestoredAt, setLastRestoredAt] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const generating = generation !== null;
+  const sendBlocked = generating || Boolean(outOfCredits);
   // Suggestion chips only render under the newest assistant message.
   const lastAssistantId = messages.reduce<string | null>(
     (acc, m) => (m.role === "assistant" ? m.id : acc),
@@ -80,7 +84,7 @@ export function ChatPanel({
 
   function submit() {
     const value = input.trim();
-    if (!value || generating) return;
+    if (!value || sendBlocked) return;
     setInput("");
     onSend(value);
   }
@@ -171,6 +175,12 @@ export function ChatPanel({
       </div>
 
       <div className="border-t border-line p-3">
+        {outOfCredits && (
+          <div className="mb-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-xs leading-relaxed text-amber-600 dark:text-amber-400">
+            You&apos;ve used all your credits, so generation is paused. 1 credit
+            covers ~1K tokens — see Settings → Credits for details.
+          </div>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -188,11 +198,13 @@ export function ChatPanel({
               }
             }}
             rows={2}
-            disabled={generating}
+            disabled={sendBlocked}
             placeholder={
-              messages.length === 0
-                ? "Describe your app… (Enter to send)"
-                : "Describe a change… (Enter to send)"
+              outOfCredits
+                ? "Out of credits — generation is paused"
+                : messages.length === 0
+                  ? "Describe your app… (Enter to send)"
+                  : "Describe a change… (Enter to send)"
             }
             className="w-full resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted disabled:opacity-50"
           />
@@ -208,7 +220,7 @@ export function ChatPanel({
             )}
             <button
               type="submit"
-              disabled={generating || !input.trim()}
+              disabled={sendBlocked || !input.trim()}
               aria-label="Send"
               className="w-9 h-9 rounded-full bg-foreground text-background grid place-items-center hover:opacity-85 transition-opacity disabled:opacity-30"
             >

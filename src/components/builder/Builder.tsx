@@ -14,6 +14,7 @@ interface BuilderProps {
   initialMessages: UiMessage[];
   initialVersions: VersionMeta[];
   initialHtml: string | null;
+  initialCredits: number;
 }
 
 export function Builder({
@@ -21,6 +22,7 @@ export function Builder({
   initialMessages,
   initialVersions,
   initialHtml,
+  initialCredits,
 }: BuilderProps) {
   const [project, setProject] = useState(initialProject);
   const [name, setName] = useState(initialProject.name);
@@ -36,6 +38,7 @@ export function Builder({
   const [restored, setRestored] = useState<RestoredInput>({ value: "", at: 0 });
   const [publishOpen, setPublishOpen] = useState(false);
   const [themeName, setThemeName] = useState<string | null>(initialProject.themeName);
+  const [credits, setCredits] = useState(initialCredits);
 
   const htmlBufRef = useRef("");
   const generatingRef = useRef(false);
@@ -117,6 +120,9 @@ export function Builder({
                 setVersions((prev) => [ev.version, ...prev]);
                 setCurrentHtml(html);
                 setTab("preview");
+                if (typeof ev.creditsRemaining === "number") {
+                  setCredits(ev.creditsRemaining);
+                }
                 break;
               }
               case "error":
@@ -302,6 +308,7 @@ export function Builder({
             onSuggestion={(text) => void send(text)}
             themeValue={themeName}
             onThemeChange={setThemeName}
+            outOfCredits={credits <= 0}
           />
         </div>
         <div className="flex-1 min-h-0">

@@ -35,7 +35,12 @@ export async function POST(req: NextRequest) {
   }
 
   const user = await prisma.user.create({
-    data: { email, passwordHash: await hashPassword(password) },
+    data: {
+      email,
+      passwordHash: await hashPassword(password),
+      // Balance comes from the column default; the ledger row records the grant.
+      creditLedger: { create: { delta: 1000, reason: "signup_grant" } },
+    },
     select: { id: true, email: true },
   });
   await createSession(user.id);

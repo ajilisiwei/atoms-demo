@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { DashboardClient } from "@/components/DashboardClient";
+import { AppsClient } from "@/components/AppsClient";
 
-export const metadata = { title: "Dashboard — Atomlet" };
+export const metadata = { title: "My apps — Atomlet" };
 
-export default async function DashboardPage() {
+export default async function AppsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
@@ -22,13 +22,9 @@ export default async function DashboardPage() {
     },
   });
 
-  const firstName = user.email.split("@")[0];
-
   return (
-    <DashboardClient
+    <AppsClient
       userEmail={user.email}
-      displayName={firstName}
-      credits={user.credits}
       initialProjects={projects.map((p) => ({
         id: p.id,
         name: p.name,

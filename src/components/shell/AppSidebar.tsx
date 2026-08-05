@@ -7,6 +7,8 @@ interface AppSidebarProps {
   userEmail: string;
   projects: { id: string; name: string }[];
   activeProjectId?: string | null;
+  // Which top-level nav item is active
+  activeNav?: "home" | "apps";
   onOpenSettings: () => void;
   onLogout: () => void;
 }
@@ -40,11 +42,12 @@ function GridIcon() {
   );
 }
 
+// Standard cog (lucide "settings") rather than a sun-like radial glyph.
 function GearIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
       <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v2.2M12 19.8V22M2 12h2.2M19.8 12H22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M19.1 4.9l-1.6 1.6M6.5 17.5l-1.6 1.6" />
     </svg>
   );
 }
@@ -53,6 +56,7 @@ export function AppSidebar({
   userEmail,
   projects,
   activeProjectId,
+  activeNav,
   onOpenSettings,
   onLogout,
 }: AppSidebarProps) {
@@ -66,11 +70,14 @@ export function AppSidebar({
       </Link>
 
       <nav className="flex flex-col gap-0.5 px-2">
-        <Link href="/dashboard" className={itemClass(!activeProjectId)}>
+        <Link
+          href="/dashboard"
+          className={itemClass(activeNav === "home" && !activeProjectId)}
+        >
           <HouseIcon />
           Home
         </Link>
-        <Link href="/dashboard#apps" className={itemClass(false)}>
+        <Link href="/apps" className={itemClass(activeNav === "apps")}>
           <GridIcon />
           My apps
         </Link>

@@ -14,9 +14,26 @@ model User {
   passwordHash String?
   name         String?
   avatarUrl    String?
+  // Generation credits: 1 credit per 1K LLM tokens; new accounts start with 1000
+  credits      Int            @default(1000)
   projects     Project[]
   oauthAccounts OAuthAccount[]
+  creditLedger CreditLedger[]
   createdAt    DateTime       @default(now())
+}
+
+model CreditLedger {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Negative = spent, positive = granted
+  delta     Int
+  tokens    Int?
+  reason    String // "generation" | "signup_grant" | ...
+  projectId String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model OAuthAccount {

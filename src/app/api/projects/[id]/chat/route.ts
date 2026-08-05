@@ -19,6 +19,8 @@ const MAX_PROMPT_LENGTH = 4000;
 const HISTORY_TURNS = 12;
 const GENERATIONS_PER_WINDOW = 8;
 const WINDOW_MS = 10 * 60 * 1000;
+// 1 credit per 1K LLM tokens, minimum 1 per generation
+const TOKENS_PER_CREDIT = 1000;
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -32,6 +34,21 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json(
       { error: `Rate limit reached — try again in ${rl.retryAfterSeconds}s` },
       { status: 429 }
+    );
+  }
+
+  const account = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { credits: true },
+  });
+  if (!account) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (account.credits <= 0) {
+    return NextResponse.json(
+      {
+        error:
+          "You're out of credits, so generation is paused. 1 credit covers ~1K tokens; check Settings → Credits for your usage.",
+      },
+      { status: 402 }
     );
   }
 
@@ -102,12 +119,14 @@ export async function POST(req: NextRequest, { params }: Params) {
 
       const parser = new GenerationParser();
       const planSteps: string[] = [];
+      let usageTotalTokens: number | null = null;
       try {
         const completion = await getLlmClient().chat.completions.create(
           {
             model: LLM_MODEL,
             messages,
             stream: true,
+            stream_options: { include_usage: true },
             max_tokens: 16000,
             temperature: 0.6,
             // DeepSeek extension: disable reasoning for fast, direct output
@@ -117,6 +136,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         );
 
         for await (const part of completion) {
+          if (part.usage?.total_tokens) usageTotalTokens = part.usage.total_tokens;
           const delta = part.choices[0]?.delta?.content ?? "";
           if (!delta) continue;
           for (const ev of parser.push(delta)) {
@@ -142,7 +162,17 @@ export async function POST(req: NextRequest, { params }: Params) {
         const suggestions = parser.suggestions;
         const nextNumber = (latestVersion?.number ?? 0) + 1;
         const now = Date.now();
-        const [, , version] = await prisma.$transaction([
+        // Fall back to a character-based estimate when the stream carried no
+        // usage frame (≈3 chars per token across mixed CJK/latin output).
+        const promptChars = messages.reduce(
+          (sum, m) => sum + (typeof m.content === "string" ? m.content.length : 0),
+          0
+        );
+        const totalTokens =
+          usageTotalTokens ?? Math.ceil((promptChars + parser.html.length) / 3);
+        const creditsSpent = Math.max(1, Math.ceil(totalTokens / TOKENS_PER_CREDIT));
+
+        const [, , version, , updatedUser] = await prisma.$transaction([
           prisma.message.create({
             data: { projectId, role: "user", content: prompt, createdAt: new Date(now) },
           }),
@@ -169,9 +199,31 @@ export async function POST(req: NextRequest, { params }: Params) {
             where: { id: projectId },
             data: { updatedAt: new Date(), themeName: effectiveThemeName },
           }),
+          prisma.user.update({
+            where: { id: userId },
+            data: { credits: { decrement: creditsSpent } },
+            select: { credits: true },
+          }),
+          prisma.creditLedger.create({
+            data: {
+              userId,
+              delta: -creditsSpent,
+              tokens: totalTokens,
+              reason: "generation",
+              projectId,
+            },
+          }),
         ]);
 
-        safeEnqueue({ type: "done", version, summary, planSteps, suggestions });
+        safeEnqueue({
+          type: "done",
+          version,
+          summary,
+          planSteps,
+          suggestions,
+          creditsSpent,
+          creditsRemaining: updatedUser.credits,
+        });
       } catch (err) {
         if (llmAbort.signal.aborted) {
           // Client left mid-generation — discard partial output silently.

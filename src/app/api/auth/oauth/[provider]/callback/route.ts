@@ -49,6 +49,8 @@ async function resolveUserId(
       oauthAccounts: {
         create: { provider, providerAccountId: profile.providerAccountId },
       },
+      // Balance comes from the column default; the ledger row records the grant.
+      creditLedger: { create: { delta: 1000, reason: "signup_grant" } },
     },
     select: { id: true },
   });

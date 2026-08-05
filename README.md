@@ -1,36 +1,122 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Atomlet — build apps by talking
 
-## Getting Started
+An Atoms-inspired AI app builder: describe an app in a sentence, watch an AI
+agent plan it and stream the code in live, iterate by chatting, then publish
+it to a public URL with one click.
 
-First, run the development server:
+Built for the ROOT / AI Native full-stack challenge.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## What it does
+
+- **Agent-driven generation** — a build agent (DeepSeek `deepseek-v4-flash`)
+  plans the app step by step, then writes a complete self-contained HTML app.
+  Plan steps and code stream into the UI in real time over SSE.
+- **Live preview** — every generation renders instantly in a sandboxed iframe.
+- **Chat iteration** — describe a change; the agent re-emits the full updated
+  app against the current code. Every generation is an immutable version.
+- **Version history** — inspect any version, restore it (append-only, never
+  rewrites history), publish any specific version.
+- **One-click publish** — the app gets a stable public URL (`/p/<slug>`),
+  served with origin isolation. Unpublish / republish at any time.
+- **Accounts & persistence** — email+password auth, projects / chat history /
+  versions all persisted in Postgres.
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│ Next.js 16 (App Router, TypeScript, Tailwind v4)     │
+│                                                      │
+│  Landing → Auth → Dashboard → Builder                │
+│    Builder = Chat + Agent timeline │ Preview/Code/   │
+│              (SSE streaming)       │ Versions tabs   │
+│                                                      │
+│  API routes (Node runtime)                           │
+│   /api/auth/*                 register/login/logout  │
+│   /api/projects[...]          CRUD + versions        │
+│   /api/projects/:id/chat      SSE generation stream  │
+│   /api/projects/:id/publish   publish/unpublish      │
+│   /p/:slug/raw                published app document │
+└───────────────┬──────────────────────────────────────┘
+                │
+   DeepSeek API (deepseek-v4-flash, streaming,
+   reasoning disabled for latency)
+                │
+   Postgres (Prisma 7 + driver adapter)
+   User · Project · Message · AppVersion
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Generation pipeline
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The agent responds in a marker protocol streamed token by token:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+<PLAN>  - build steps …            → agent timeline (SSE: plan_step)
+<FILE>  <!doctype html> …          → code pane      (SSE: html_delta)
+<SUMMARY> what was built …         → chat reply     (SSE: summary)
+```
 
-## Learn More
+`src/lib/stream-parser.ts` is an incremental state machine that survives
+markers split across chunks, holds back partial closing tags, and rescues
+non-conforming outputs (bare HTML / markdown fences). On success the version
++ messages are persisted atomically and a `done` event closes the stream.
 
-To learn more about Next.js, take a look at the following resources:
+### Security model for generated code
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Generated apps are untrusted input:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Builder preview** renders via `iframe srcdoc` with
+  `sandbox="allow-scripts allow-same-origin allow-forms allow-modals"` —
+  the owner runs only their own generated code.
+- **Published pages** are served as a real document from `/p/:slug/raw` with
+  `Content-Security-Policy: sandbox allow-scripts allow-forms allow-modals`,
+  giving them an **opaque origin**: a malicious generated app cannot call
+  Atomlet APIs with a viewer's session cookie. Since opaque origins make
+  `localStorage` throw, a small storage shim (in-memory fallback) is injected
+  into published HTML (`src/lib/storage-shim.ts`).
 
-## Deploy on Vercel
+Other hardening: bcrypt password hashing, httpOnly SameSite JWT session
+cookie, ownership checks on every project route, per-user/IP rate limits,
+prompt length caps, LLM output validation before persisting.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Run locally
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Prereqs: Node 20+, pnpm, Docker.
+
+```bash
+cp .env.example .env          # fill JWT_SECRET (openssl rand -hex 32) and DEEPSEEK_API_KEY
+docker compose up -d          # Postgres on :54329
+pnpm install                  # runs prisma generate
+npx prisma migrate dev        # apply schema
+pnpm dev                      # http://localhost:3000
+```
+
+## Deploy
+
+Any Node host + any Postgres works. Reference setup:
+
+1. Postgres: Supabase / Neon — set `DATABASE_URL`.
+2. Vercel: import the repo, set `DATABASE_URL`, `JWT_SECRET`,
+   `DEEPSEEK_API_KEY` (optional `LLM_MODEL`), deploy.
+   `postinstall` runs `prisma generate`; run
+   `npx prisma migrate deploy` once against the production DB.
+
+Note: the in-memory rate limiter assumes a single instance; swap for
+Redis/Upstash if scaling out.
+
+## Key trade-offs (by design, for a 6-8h scope)
+
+- **Single-file HTML output** instead of multi-file projects — makes preview,
+  storage, versioning and publishing trivial; the protocol has a `FILE`
+  marker so multi-file is a natural extension.
+- **Full regeneration on edit** instead of diffs — slower but far more
+  reliable within the time budget; versions make it safe.
+- **Append-only versions with restore-as-copy** — no history rewrites.
+
+## If I had more time
+
+1. Multi-file projects + client-side esbuild for React/TS output
+2. Diff-based edits (send patch, apply server-side) to cut latency/cost
+3. Race mode: two models generate in parallel, user picks the winner
+4. Per-app key-value storage API so published apps get real persistence
+5. Streaming preview (render partial HTML during generation)

@@ -26,6 +26,10 @@ export default async function PublishedAppPage({ params }: Props) {
 
   return (
     <div className="fixed inset-0">
+      {/* Isolation comes from the CSP `sandbox` response header on /raw
+          (opaque origin). No sandbox attribute here: iframes carrying a
+          sandbox attribute without allow-same-origin fail to render at all
+          in some Chrome environments. */}
       <iframe
         src={`/p/${slug}/raw`}
         title={project.name}

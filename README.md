@@ -63,17 +63,26 @@ non-conforming outputs (bare HTML / markdown fences). On success the version
 
 ### Security model for generated code
 
-Generated apps are untrusted input:
+Generated apps are untrusted input — LLM output can be poisoned by indirect
+prompt injection, so even the owner's own preview must not run with the
+platform's origin:
 
-- **Builder preview** renders via `iframe srcdoc` with
-  `sandbox="allow-scripts allow-same-origin allow-forms allow-modals"` —
-  the owner runs only their own generated code.
-- **Published pages** are served as a real document from `/p/:slug/raw` with
+- **Builder preview** loads from an owner-authenticated route
+  (`/api/projects/:id/versions/:versionId/raw`) and **published pages** from
+  `/p/:slug/raw`. Both are served with
   `Content-Security-Policy: sandbox allow-scripts allow-forms allow-modals`,
-  giving them an **opaque origin**: a malicious generated app cannot call
-  Atomlet APIs with a viewer's session cookie. Since opaque origins make
-  `localStorage` throw, a small storage shim (in-memory fallback) is injected
-  into published HTML (`src/lib/storage-shim.ts`).
+  giving the generated document an **opaque origin**: it cannot call Atomlet
+  APIs with the viewer's session cookie, regardless of what code the model
+  produced. (The header, not an iframe `sandbox` attribute, is the isolation
+  mechanism — sandbox-attribute iframes without `allow-same-origin` fail to
+  render entirely in some Chrome environments.)
+- Opaque origins make `localStorage` throw, so a small storage shim
+  (in-memory fallback) is injected into served HTML
+  (`src/lib/storage-shim.ts`) — generated apps keep working, their data lives
+  per tab session.
+- Known limitation: published apps share the platform's domain (a phishing
+  consideration); a dedicated wildcard subdomain per app is the standard fix
+  and first on the security roadmap.
 
 Other hardening: bcrypt password hashing, httpOnly SameSite JWT session
 cookie, ownership checks on every project route, per-user/IP rate limits,

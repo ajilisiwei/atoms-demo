@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const project = await prisma.project.findFirst({
     where: { id, userId },
     include: {
-      messages: { orderBy: { createdAt: "asc" } },
+      messages: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
       versions: {
         orderBy: { number: "desc" },
         select: { id: true, number: true, promptSummary: true, createdAt: true },

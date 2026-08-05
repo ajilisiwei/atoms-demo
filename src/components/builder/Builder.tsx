@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, streamGeneration, type VersionMeta } from "@/lib/client/api";
 import { AUTORUN_PREFIX } from "@/components/DashboardClient";
-import { ChatPanel } from "./ChatPanel";
+import { ChatPanel, type RestoredInput } from "./ChatPanel";
 import { PreviewPanel, type PanelTab } from "./PreviewPanel";
 import { PublishDialog } from "./PublishDialog";
 import type { BuilderProject, GenerationState, UiMessage } from "./types";
@@ -33,16 +33,33 @@ export function Builder({
   const [viewing, setViewing] = useState<{ id: string; number: number } | null>(null);
   const [viewingHtml, setViewingHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [restoredInput, setRestoredInput] = useState("");
+  const [restored, setRestored] = useState<RestoredInput>({ value: "", at: 0 });
   const [publishOpen, setPublishOpen] = useState(false);
 
   const htmlBufRef = useRef("");
   const generatingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  const autoStarted = useRef(false);
+
+  // Declared before the autorun effect so its setup runs first on every
+  // (Strict Mode) remount, keeping mountedRef accurate at timer-fire time.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  const hasVersions = versions.length > 0;
 
   const send = useCallback(
     async (prompt: string) => {
       if (generatingRef.current) return;
       generatingRef.current = true;
+      const abort = new AbortController();
+      abortRef.current = abort;
       setError(null);
       setViewing(null);
       setViewingHtml(null);
@@ -59,70 +76,87 @@ export function Builder({
 
       let failure: string | null = null;
       try {
-        await streamGeneration(project.id, prompt, (ev) => {
-          switch (ev.type) {
-            case "plan_step":
-              setGeneration((g) =>
-                g ? { ...g, planSteps: [...g.planSteps, ev.text] } : g
-              );
-              break;
-            case "html_delta":
-              htmlBufRef.current += ev.delta;
-              setGeneration((g) =>
-                g && g.phase === "planning" ? { ...g, phase: "coding" } : g
-              );
-              break;
-            case "summary":
-              setGeneration((g) => (g ? { ...g, phase: "finishing" } : g));
-              break;
-            case "done": {
-              const html = htmlBufRef.current;
-              const stamp = Date.now();
-              setMessages((prev) => [
-                ...prev,
-                { id: `local-u-${stamp}`, role: "user", content: prompt, planSteps: null },
-                {
-                  id: `local-a-${stamp}`,
-                  role: "assistant",
-                  content: ev.summary,
-                  planSteps: ev.planSteps.length > 0 ? ev.planSteps : null,
-                },
-              ]);
-              setVersions((prev) => [ev.version, ...prev]);
-              setCurrentHtml(html);
-              setTab("preview");
-              break;
+        await streamGeneration(
+          project.id,
+          prompt,
+          (ev) => {
+            switch (ev.type) {
+              case "plan_step":
+                setGeneration((g) =>
+                  g ? { ...g, planSteps: [...g.planSteps, ev.text] } : g
+                );
+                break;
+              case "html_delta":
+                htmlBufRef.current += ev.delta;
+                setGeneration((g) =>
+                  g && g.phase === "planning" ? { ...g, phase: "coding" } : g
+                );
+                break;
+              case "summary":
+                setGeneration((g) => (g ? { ...g, phase: "finishing" } : g));
+                break;
+              case "done": {
+                const html = htmlBufRef.current;
+                const stamp = Date.now();
+                setMessages((prev) => [
+                  ...prev,
+                  { id: `local-u-${stamp}`, role: "user", content: prompt, planSteps: null },
+                  {
+                    id: `local-a-${stamp}`,
+                    role: "assistant",
+                    content: ev.summary,
+                    planSteps: ev.planSteps.length > 0 ? ev.planSteps : null,
+                  },
+                ]);
+                setVersions((prev) => [ev.version, ...prev]);
+                setCurrentHtml(html);
+                setTab("preview");
+                break;
+              }
+              case "error":
+                failure = ev.message;
+                break;
             }
-            case "error":
-              failure = ev.message;
-              break;
-          }
-        });
+          },
+          abort.signal
+        );
       } catch (err) {
-        failure = err instanceof ApiError ? err.message : "Generation failed — please retry";
+        failure = abort.signal.aborted
+          ? null // component unmounted / navigation — stay silent
+          : err instanceof ApiError
+            ? err.message
+            : "Generation failed — please retry";
       } finally {
         clearInterval(flushTimer);
-        setStreamingCode(null);
-        setGeneration(null);
         generatingRef.current = false;
+        if (mountedRef.current) {
+          setStreamingCode(null);
+          setGeneration(null);
+        }
       }
-      if (failure) {
+      if (failure && mountedRef.current) {
         setError(failure);
-        setRestoredInput(prompt);
-        setTab(currentHtml ? "preview" : "code");
+        setRestored({ value: prompt, at: Date.now() });
+        setTab(hasVersions ? "preview" : "code");
       }
     },
-    [project.id, currentHtml]
+    [project.id, hasVersions]
   );
 
   // Auto-run the prompt carried over from the landing page / dashboard.
+  // Deferred via setTimeout so no state updates happen synchronously inside
+  // the effect; no cleanup on purpose — clearing the timer would drop the
+  // autorun under Strict Mode's remount, so the mountedRef guards instead.
   useEffect(() => {
+    if (autoStarted.current) return;
     const key = `${AUTORUN_PREFIX}${project.id}`;
     const pending = sessionStorage.getItem(key);
-    if (pending) {
-      sessionStorage.removeItem(key);
-      void send(pending);
-    }
+    if (!pending) return;
+    autoStarted.current = true;
+    sessionStorage.removeItem(key);
+    setTimeout(() => {
+      if (mountedRef.current) void send(pending);
+    }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -185,6 +219,10 @@ export function Builder({
   }
 
   const latestVersion = versions[0] ?? null;
+  const previewVersionId = viewing?.id ?? latestVersion?.id ?? null;
+  const previewSrc = previewVersionId
+    ? `/api/projects/${project.id}/versions/${previewVersionId}/raw`
+    : null;
   const publishTargetId = viewing?.id ?? latestVersion?.id ?? null;
 
   return (
@@ -233,7 +271,7 @@ export function Builder({
             messages={messages}
             generation={generation}
             error={error}
-            initialInput={restoredInput}
+            restored={restored}
             onSend={(p) => void send(p)}
             onDismissError={() => setError(null)}
           />
@@ -242,7 +280,8 @@ export function Builder({
           <PreviewPanel
             tab={tab}
             onTabChange={setTab}
-            html={viewing ? viewingHtml : currentHtml}
+            previewSrc={previewSrc}
+            codeText={viewing ? viewingHtml : currentHtml}
             streamingCode={streamingCode}
             versions={versions}
             viewing={viewing}

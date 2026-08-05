@@ -17,7 +17,7 @@ export default async function BuilderPage({
   const project = await prisma.project.findFirst({
     where: { id: projectId, userId },
     include: {
-      messages: { orderBy: { createdAt: "asc" } },
+      messages: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
       versions: {
         orderBy: { number: "desc" },
         select: { id: true, number: true, promptSummary: true, createdAt: true },

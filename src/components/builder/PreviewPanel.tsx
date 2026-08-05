@@ -13,7 +13,10 @@ interface ViewingVersion {
 interface PreviewPanelProps {
   tab: PanelTab;
   onTabChange: (tab: PanelTab) => void;
-  html: string | null;
+  // URL of the sandboxed document for the version being previewed
+  previewSrc: string | null;
+  // Full HTML text shown in the Code tab
+  codeText: string | null;
   streamingCode: string | null;
   versions: VersionMeta[];
   viewing: ViewingVersion | null;
@@ -32,7 +35,8 @@ const TABS: { key: PanelTab; label: string }[] = [
 export function PreviewPanel({
   tab,
   onTabChange,
-  html,
+  previewSrc,
+  codeText,
   streamingCode,
   versions,
   viewing,
@@ -53,13 +57,13 @@ export function PreviewPanel({
   }, [streamingCode, streaming]);
 
   async function copyCode() {
-    if (!html) return;
-    await navigator.clipboard.writeText(html);
+    if (!codeText) return;
+    await navigator.clipboard.writeText(codeText);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
 
-  const shownCode = streaming ? streamingCode : html;
+  const shownCode = streaming ? streamingCode : codeText;
 
   return (
     <div className="flex h-full flex-col">
@@ -80,7 +84,7 @@ export function PreviewPanel({
             )}
           </button>
         ))}
-        {tab === "code" && html && !streaming && (
+        {tab === "code" && codeText && !streaming && (
           <button
             onClick={copyCode}
             className="ml-auto text-xs text-muted hover:text-foreground transition-colors"
@@ -109,11 +113,14 @@ export function PreviewPanel({
 
       <div className="flex-1 min-h-0 bg-[#0d1017]">
         {tab === "preview" &&
-          (html ? (
+          (previewSrc ? (
+            /* Isolation comes from the CSP `sandbox` response header on the
+               raw route (opaque origin). No sandbox attribute here: iframes
+               carrying a sandbox attribute without allow-same-origin fail to
+               render at all in some Chrome environments. */
             <iframe
-              key={viewing?.id ?? "latest"}
-              srcDoc={html}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+              key={previewSrc}
+              src={previewSrc}
               title="App preview"
               className="h-full w-full border-0 bg-white"
             />

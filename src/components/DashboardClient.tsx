@@ -39,6 +39,14 @@ export function DashboardClient({ userEmail, initialProjects }: DashboardClientP
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoStarted = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   async function createProject(initialPrompt?: string) {
     if (creating) return;
@@ -61,14 +69,19 @@ export function DashboardClient({ userEmail, initialProjects }: DashboardClientP
   }
 
   // If the user typed a prompt on the landing page before signing up,
-  // pick it up here and jump straight into the builder.
+  // pick it up here and jump straight into the builder. Deferred via
+  // setTimeout so no state updates happen synchronously inside the effect;
+  // no cleanup on purpose — clearing the timer would drop the autorun under
+  // Strict Mode's remount, so the mountedRef guards instead.
   useEffect(() => {
     if (autoStarted.current) return;
     const pending = sessionStorage.getItem(PENDING_PROMPT_KEY);
     if (pending) {
       autoStarted.current = true;
       sessionStorage.removeItem(PENDING_PROMPT_KEY);
-      void createProject(pending);
+      setTimeout(() => {
+        if (mountedRef.current) void createProject(pending);
+      }, 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

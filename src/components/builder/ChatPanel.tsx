@@ -3,11 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import type { GenerationState, UiMessage } from "./types";
 
+export interface RestoredInput {
+  value: string;
+  at: number;
+}
+
 interface ChatPanelProps {
   messages: UiMessage[];
   generation: GenerationState | null;
   error: string | null;
-  initialInput: string;
+  // Prompt to put back into the input after a failed generation; `at` gives
+  // each restore a fresh identity so repeated failures re-fill the box.
+  restored: RestoredInput;
   onSend: (prompt: string) => void;
   onDismissError: () => void;
 }
@@ -37,17 +44,21 @@ export function ChatPanel({
   messages,
   generation,
   error,
-  initialInput,
+  restored,
   onSend,
   onDismissError,
 }: ChatPanelProps) {
-  const [input, setInput] = useState(initialInput);
+  const [input, setInput] = useState("");
+  const [lastRestoredAt, setLastRestoredAt] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const generating = generation !== null;
 
-  useEffect(() => {
-    setInput(initialInput);
-  }, [initialInput]);
+  // Adjust state during render when the prop changes (React's documented
+  // alternative to syncing props via useEffect).
+  if (restored.at !== lastRestoredAt) {
+    setLastRestoredAt(restored.at);
+    if (restored.value) setInput(restored.value);
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

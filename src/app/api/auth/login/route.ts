@@ -21,6 +21,13 @@ export async function POST(req: NextRequest) {
   const email = body.email?.trim().toLowerCase() ?? "";
   const password = body.password ?? "";
 
+  // Second limiter keyed by target account, since x-forwarded-for alone is
+  // spoofable outside trusted-proxy deployments (see lib/ratelimit.ts).
+  const rlAccount = checkRateLimit(`login:email:${email}`, 10, 10 * 60 * 1000);
+  if (!rlAccount.ok) {
+    return NextResponse.json({ error: "Too many attempts, try again later" }, { status: 429 });
+  }
+
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
     return NextResponse.json({ error: "Incorrect email or password" }, { status: 401 });

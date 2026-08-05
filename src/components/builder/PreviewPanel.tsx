@@ -113,7 +113,7 @@ export function PreviewPanel({
             <iframe
               key={viewing?.id ?? "latest"}
               srcDoc={html}
-              sandbox="allow-scripts allow-same-origin allow-modals"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
               title="App preview"
               className="h-full w-full border-0 bg-white"
             />

@@ -1,8 +1,9 @@
-// Published apps run in a sandboxed iframe WITHOUT allow-same-origin, so a
-// malicious generated app can never touch a viewer's Atomlet session. The
-// trade-off: the opaque origin makes localStorage throw. This shim, injected
-// into published HTML, falls back to in-memory storage so generated apps keep
-// working (data then lives for the tab session only).
+// Published apps are served with a `Content-Security-Policy: sandbox` header,
+// giving them an opaque origin so a malicious generated app can never call
+// Atomlet APIs with a viewer's session. The trade-off: opaque origins make
+// localStorage throw. This shim, injected into published HTML, falls back to
+// in-memory storage so generated apps keep working (data then lives for the
+// tab session only).
 const STORAGE_SHIM = `<script>
 (function () {
   try {

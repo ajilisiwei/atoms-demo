@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { injectStorageShim } from "@/lib/storage-shim";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -21,15 +20,14 @@ export default async function PublishedAppPage({ params }: Props) {
   const { slug } = await params;
   const project = await prisma.project.findUnique({
     where: { slug },
-    include: { publishedVersion: { select: { html: true } } },
+    select: { name: true, publishedVersionId: true },
   });
-  if (!project?.publishedVersion) notFound();
+  if (!project?.publishedVersionId) notFound();
 
   return (
     <div className="fixed inset-0">
       <iframe
-        srcDoc={injectStorageShim(project.publishedVersion.html)}
-        sandbox="allow-scripts allow-modals"
+        src={`/p/${slug}/raw`}
         title={project.name}
         className="h-full w-full border-0 bg-white"
       />

@@ -56,6 +56,8 @@ model Project {
   themeName          String?
   // Built-in agent persona id (see src/lib/agents.ts); null = default builder
   agentId            String?
+  // Starred by the owner; pinned into the sidebar's Favorites group
+  favorite           Boolean      @default(false)
   // Set when this project was remixed from a published project
   remixedFromId      String?
   remixedFrom        Project?     @relation("Remixes", fields: [remixedFromId], references: [id], onDelete: SetNull)

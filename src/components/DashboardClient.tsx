@@ -7,7 +7,7 @@ import { api, ApiError } from "@/lib/client/api";
 import { useT } from "@/lib/i18n";
 import { Logo } from "@/components/Logo";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { AppSidebar } from "@/components/shell/AppSidebar";
+import { AppSidebar, type ProjectChange } from "@/components/shell/AppSidebar";
 import { MobileSidebar } from "@/components/shell/MobileSidebar";
 import { SettingsDialog, type SettingsSection } from "@/components/shell/SettingsDialog";
 import { PromptComposer } from "@/components/composer/PromptComposer";
@@ -135,6 +135,21 @@ export function DashboardClient({
     }
   }
 
+
+  function handleProjectChanged(change: ProjectChange) {
+    if (change.type === "delete") {
+      setProjects((prev) => prev.filter((p) => p.id !== change.id));
+    } else if (change.type === "rename") {
+      setProjects((prev) =>
+        prev.map((p) => (p.id === change.id ? { ...p, name: change.name } : p))
+      );
+    } else {
+      setProjects((prev) =>
+        prev.map((p) => (p.id === change.id ? { ...p, favorite: change.favorite } : p))
+      );
+    }
+  }
+
   async function logout() {
     await api("/api/auth/logout", { method: "POST" });
     router.push("/");
@@ -146,7 +161,9 @@ export function DashboardClient({
       <div className="hidden lg:flex">
         <AppSidebar
           userEmail={userEmail}
-          projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+          projects={projects.map((p) => ({ id: p.id, name: p.name, favorite: p.favorite }))}
+          onProjectChanged={handleProjectChanged}
+          onActionError={setError}
           activeNav="home"
           onOpenSettings={() => openSettings()}
           onLogout={() => void logout()}
@@ -242,7 +259,9 @@ export function DashboardClient({
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
         userEmail={userEmail}
-        projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        projects={projects.map((p) => ({ id: p.id, name: p.name, favorite: p.favorite }))}
+          onProjectChanged={handleProjectChanged}
+          onActionError={setError}
         activeNav="home"
         onOpenSettings={() => {
           setMobileNavOpen(false);

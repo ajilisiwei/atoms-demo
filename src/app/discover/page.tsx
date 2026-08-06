@@ -28,7 +28,7 @@ export default async function DiscoverPage() {
     prisma.project.findMany({
       where: { userId: user.id },
       orderBy: { updatedAt: "desc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, favorite: true },
     }),
   ]);
 

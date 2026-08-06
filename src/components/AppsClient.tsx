@@ -7,7 +7,7 @@ import { api, ApiError } from "@/lib/client/api";
 import { useT } from "@/lib/i18n";
 import { Logo } from "@/components/Logo";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { AppSidebar } from "@/components/shell/AppSidebar";
+import { AppSidebar, type ProjectChange } from "@/components/shell/AppSidebar";
 import { MobileSidebar } from "@/components/shell/MobileSidebar";
 import { SettingsDialog } from "@/components/shell/SettingsDialog";
 import { ProjectsGrid, type ProjectListItem } from "@/components/ProjectsGrid";
@@ -23,6 +23,7 @@ export function AppsClient({ userEmail, initialProjects }: AppsClientProps) {
   const [projects, setProjects] = useState(initialProjects);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [filter, setFilter] = useState<"all" | "favorites">("all");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -48,6 +49,21 @@ export function AppsClient({ userEmail, initialProjects }: AppsClientProps) {
     }
   }
 
+
+  function handleProjectChanged(change: ProjectChange) {
+    if (change.type === "delete") {
+      setProjects((prev) => prev.filter((p) => p.id !== change.id));
+    } else if (change.type === "rename") {
+      setProjects((prev) =>
+        prev.map((p) => (p.id === change.id ? { ...p, name: change.name } : p))
+      );
+    } else {
+      setProjects((prev) =>
+        prev.map((p) => (p.id === change.id ? { ...p, favorite: change.favorite } : p))
+      );
+    }
+  }
+
   async function logout() {
     await api("/api/auth/logout", { method: "POST" });
     router.push("/");
@@ -59,7 +75,9 @@ export function AppsClient({ userEmail, initialProjects }: AppsClientProps) {
       <div className="hidden lg:flex">
         <AppSidebar
           userEmail={userEmail}
-          projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+          projects={projects.map((p) => ({ id: p.id, name: p.name, favorite: p.favorite }))}
+          onProjectChanged={handleProjectChanged}
+          onActionError={setError}
           activeNav="apps"
           onOpenSettings={() => setSettingsOpen(true)}
           onLogout={() => void logout()}
@@ -97,12 +115,28 @@ export function AppsClient({ userEmail, initialProjects }: AppsClientProps) {
               {t("shell.newApp")}
             </Link>
           </div>
-          <p className="text-sm text-muted mb-8">{t("shell.appsSubtitle")}</p>
+          <p className="text-sm text-muted mb-6">{t("shell.appsSubtitle")}</p>
+
+          <div className="mb-6 flex items-center gap-1.5">
+            {(["all", "favorites"] as const).map((key) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`rounded-full px-3.5 py-1.5 text-sm transition-colors ${
+                  filter === key
+                    ? "bg-foreground text-background font-medium"
+                    : "border border-line text-muted hover:text-foreground hover:bg-panel-2"
+                }`}
+              >
+                {t(key === "all" ? "shell.tabAll" : "shell.tabFavorites")}
+              </button>
+            ))}
+          </div>
 
           {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
 
           <ProjectsGrid
-            projects={projects}
+            projects={filter === "all" ? projects : projects.filter((p) => p.favorite)}
             onDelete={requestDelete}
             emptyHint={t("shell.emptyApps")}
           />
@@ -113,7 +147,9 @@ export function AppsClient({ userEmail, initialProjects }: AppsClientProps) {
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
         userEmail={userEmail}
-        projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        projects={projects.map((p) => ({ id: p.id, name: p.name, favorite: p.favorite }))}
+          onProjectChanged={handleProjectChanged}
+          onActionError={setError}
         activeNav="apps"
         onOpenSettings={() => {
           setMobileNavOpen(false);

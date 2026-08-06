@@ -8,6 +8,7 @@ export interface ProjectListItem {
   name: string;
   slug: string | null;
   published: boolean;
+  favorite: boolean;
   versionCount: number;
   updatedAt: string;
 }
@@ -50,8 +51,20 @@ export function ProjectsGrid({ projects, onDelete, emptyHint }: ProjectsGridProp
         >
           <div className="flex items-start justify-between gap-3">
             <Link href={`/builder/${p.id}`} className="flex-1 min-w-0">
-              <h3 className="text-sm font-medium truncate group-hover:text-accent-2 transition-colors">
-                {p.name}
+              <h3 className="flex items-center gap-1.5 text-sm font-medium group-hover:text-accent-2 transition-colors">
+                {p.favorite && (
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                    className="shrink-0 text-amber-500"
+                  >
+                    <path d="M12 2.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9l5.9-.8z" />
+                  </svg>
+                )}
+                <span className="truncate">{p.name}</span>
               </h3>
               <p className="text-xs text-muted mt-1">
                 {t(p.versionCount === 1 ? "shell.versionOne" : "shell.versionMany", {

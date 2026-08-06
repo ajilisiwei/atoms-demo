@@ -8,7 +8,7 @@ import { api, ApiError } from "@/lib/client/api";
 import { useT } from "@/lib/i18n";
 import { getBuiltinAgent } from "@/lib/agents";
 import { Logo } from "@/components/Logo";
-import { AppSidebar } from "@/components/shell/AppSidebar";
+import { AppSidebar, type ProjectChange, type SidebarProject } from "@/components/shell/AppSidebar";
 import { MobileSidebar } from "@/components/shell/MobileSidebar";
 import { SettingsDialog } from "@/components/shell/SettingsDialog";
 
@@ -25,7 +25,7 @@ export interface DiscoverItem {
 
 interface DiscoverClientProps {
   userEmail: string;
-  sidebarProjects: { id: string; name: string }[];
+  sidebarProjects: SidebarProject[];
   initialItems: DiscoverItem[];
 }
 
@@ -95,6 +95,21 @@ export function DiscoverClient({
   const t = useT();
   const router = useRouter();
   const [items] = useState(initialItems);
+  const [sideProjects, setSideProjects] = useState(sidebarProjects);
+
+  function handleProjectChanged(change: ProjectChange) {
+    if (change.type === "delete") {
+      setSideProjects((prev) => prev.filter((p) => p.id !== change.id));
+    } else if (change.type === "rename") {
+      setSideProjects((prev) =>
+        prev.map((p) => (p.id === change.id ? { ...p, name: change.name } : p))
+      );
+    } else {
+      setSideProjects((prev) =>
+        prev.map((p) => (p.id === change.id ? { ...p, favorite: change.favorite } : p))
+      );
+    }
+  }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [remixingId, setRemixingId] = useState<string | null>(null);
@@ -124,7 +139,9 @@ export function DiscoverClient({
 
   const sidebarProps = {
     userEmail,
-    projects: sidebarProjects,
+    projects: sideProjects,
+    onProjectChanged: handleProjectChanged,
+    onActionError: setError,
     activeNav: "discover" as const,
     onLogout: () => void logout(),
   };

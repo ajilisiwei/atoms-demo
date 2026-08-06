@@ -45,19 +45,33 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const project = await findOwnedProject(id, userId);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-  let body: { name?: string };
+  let body: { name?: string; favorite?: boolean };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const name = body.name?.trim().slice(0, 80);
-  if (!name) return NextResponse.json({ error: "Name must not be empty" }, { status: 400 });
+
+  const data: { name?: string; favorite?: boolean } = {};
+  if (body.name !== undefined) {
+    const name = body.name.trim().slice(0, 80);
+    if (!name) return NextResponse.json({ error: "Name must not be empty" }, { status: 400 });
+    data.name = name;
+  }
+  if (body.favorite !== undefined) {
+    if (typeof body.favorite !== "boolean") {
+      return NextResponse.json({ error: "favorite must be a boolean" }, { status: 400 });
+    }
+    data.favorite = body.favorite;
+  }
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
 
   const updated = await prisma.project.update({
     where: { id },
-    data: { name },
-    select: { id: true, name: true },
+    data,
+    select: { id: true, name: true, favorite: true },
   });
   return NextResponse.json({ project: updated });
 }

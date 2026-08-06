@@ -39,7 +39,8 @@ jobs:
         run: pnpm lint
 
       - name: Type check
-        run: npx tsc --noEmit
+        # next typegen produces .next/types (LayoutProps etc.) that tsc needs
+        run: npx next typegen && npx tsc --noEmit
 
       - name: Apply database migrations
         run: npx prisma migrate deploy

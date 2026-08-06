@@ -70,6 +70,11 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
   "builder.preview.refresh": { en: "Refresh preview", zh: "刷新预览" },
   "builder.preview.openNewTab": { en: "Open in new tab", zh: "在新标签页打开" },
   "builder.preview.iframeTitle": { en: "App preview", zh: "应用预览" },
+  "builder.timeline.label": { en: "Evolution", zh: "进化史" },
+  "builder.timeline.play": { en: "Replay the app's evolution", zh: "回放应用进化过程" },
+  "builder.timeline.pause": { en: "Pause replay", zh: "暂停回放" },
+  "builder.timeline.slider": { en: "Version timeline", zh: "版本时间线" },
+  "builder.timeline.initial": { en: "First build", zh: "初始版本" },
   "builder.preview.emptyStreaming": {
     en: "The agent is writing code — preview appears when it finishes.",
     zh: "智能体正在编写代码 — 完成后即可预览。",

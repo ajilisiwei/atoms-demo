@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { VersionMeta } from "@/lib/client/api";
 import { useT } from "@/lib/i18n";
 
@@ -134,6 +134,77 @@ export function PreviewPanel({
 
   const shownCode = streaming ? streamingCode : codeText;
 
+  // --- Evolution timeline (v1 → vN scrubber + replay) ---------------------
+  // `versions` arrives newest-first; the timeline runs oldest-first.
+  const ascVersions = useMemo(() => [...versions].reverse(), [versions]);
+  const externalIdx = viewing
+    ? ascVersions.findIndex((v) => v.id === viewing.id)
+    : ascVersions.length - 1;
+  // Local position while dragging/replaying (debounced commit keeps rapid
+  // scrubbing from firing a fetch per tick).
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const slideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const displayIdx = dragIdx ?? (externalIdx === -1 ? ascVersions.length - 1 : externalIdx);
+  const displayVersion = ascVersions[displayIdx] ?? null;
+  const showTimeline =
+    tab === "preview" && Boolean(previewSrc) && !streaming && ascVersions.length >= 2;
+
+  function selectIdx(idx: number) {
+    const v = ascVersions[idx];
+    if (!v) return;
+    if (idx === ascVersions.length - 1) onBackToLatest();
+    else onViewVersion(v.id);
+  }
+
+  function stopPlay() {
+    if (playTimer.current) clearInterval(playTimer.current);
+    playTimer.current = null;
+    setPlaying(false);
+  }
+
+  function onSlide(idx: number) {
+    stopPlay();
+    setDragIdx(idx);
+    if (slideTimer.current) clearTimeout(slideTimer.current);
+    slideTimer.current = setTimeout(() => {
+      setDragIdx(null);
+      selectIdx(idx);
+    }, 250);
+  }
+
+  function togglePlay() {
+    if (playing) {
+      stopPlay();
+      setDragIdx(null);
+      return;
+    }
+    if (ascVersions.length < 2) return;
+    setPlaying(true);
+    let idx = 0;
+    setDragIdx(0);
+    selectIdx(0);
+    playTimer.current = setInterval(() => {
+      idx += 1;
+      if (idx >= ascVersions.length) {
+        stopPlay();
+        setDragIdx(null);
+        return;
+      }
+      setDragIdx(idx);
+      selectIdx(idx);
+    }, 1600);
+  }
+
+  useEffect(
+    () => () => {
+      if (slideTimer.current) clearTimeout(slideTimer.current);
+      if (playTimer.current) clearInterval(playTimer.current);
+    },
+    []
+  );
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1 border-b border-line px-3 py-2">
@@ -247,13 +318,58 @@ export function PreviewPanel({
                raw route (opaque origin). No sandbox attribute here: iframes
                carrying a sandbox attribute without allow-same-origin fail to
                render at all in some Chrome environments. */
-            <div className="flex justify-center h-full bg-background">
-              <iframe
-                key={previewSrc + "-" + reloadNonce}
-                src={previewSrc}
-                title={t("builder.preview.iframeTitle")}
-                className={`bg-white ${IFRAME_CLASS[deviceWidth]}`}
-              />
+            <div className="flex h-full flex-col">
+              <div className="flex flex-1 min-h-0 justify-center bg-background">
+                <iframe
+                  key={previewSrc + "-" + reloadNonce}
+                  src={previewSrc}
+                  title={t("builder.preview.iframeTitle")}
+                  className={`bg-white ${IFRAME_CLASS[deviceWidth]}`}
+                />
+              </div>
+              {showTimeline && displayVersion && (
+                <div className="flex items-center gap-3 border-t border-line bg-panel px-4 py-2.5">
+                  <button
+                    onClick={togglePlay}
+                    title={playing ? t("builder.timeline.pause") : t("builder.timeline.play")}
+                    aria-label={
+                      playing ? t("builder.timeline.pause") : t("builder.timeline.play")
+                    }
+                    className="w-7 h-7 shrink-0 rounded-md grid place-items-center text-muted hover:text-foreground hover:bg-panel-2 transition-colors"
+                  >
+                    {playing ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <rect x="5" y="4" width="5" height="16" rx="1" />
+                        <rect x="14" y="4" width="5" height="16" rx="1" />
+                      </svg>
+                    ) : (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M7 4.5v15a1 1 0 0 0 1.5.87l13-7.5a1 1 0 0 0 0-1.74l-13-7.5A1 1 0 0 0 7 4.5z" />
+                      </svg>
+                    )}
+                  </button>
+                  <span className="shrink-0 text-xs font-medium tabular-nums">
+                    v{displayVersion.number}
+                    <span className="text-muted">/{ascVersions.length}</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={ascVersions.length - 1}
+                    step={1}
+                    value={displayIdx}
+                    onChange={(e) => onSlide(Number(e.target.value))}
+                    aria-label={t("builder.timeline.slider")}
+                    className="h-1.5 flex-1 cursor-pointer"
+                    style={{ accentColor: "var(--accent-2)" }}
+                  />
+                  <span className="hidden sm:block max-w-[220px] shrink-0 truncate text-xs text-muted">
+                    {displayVersion.number === 1
+                      ? t("builder.timeline.initial")
+                      : displayVersion.promptSummary}
+                  </span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex h-full items-center justify-center text-muted text-sm px-8 text-center">

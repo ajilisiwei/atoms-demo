@@ -1,0 +1,53 @@
+# Production pipeline: quality gate → Neon migrations → Vercel deploy.
+# Migrations run BEFORE the deploy so new code never ships ahead of its
+# schema; our migrations are additive, so the old build stays compatible
+# during the rollout window.
+#
+# Required repository secrets:
+#   DATABASE_URL       Neon direct (non-pooled) connection string
+#   VERCEL_TOKEN       personal token from vercel.com/account/tokens
+#   VERCEL_ORG_ID      from .vercel/project.json
+#   VERCEL_PROJECT_ID  from .vercel/project.json
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Deploy to Vercel
+        run: npx vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

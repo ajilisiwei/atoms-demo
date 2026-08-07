@@ -20,11 +20,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Public published content, so browser/CDN caching is safe. Embedders pass
+  // ?v=<updatedAt> so a republish mints a fresh URL and bypasses the cache;
+  // the bare URL may serve up to max-age of staleness, which is acceptable.
   return new Response(injectStorageShim(project.publishedVersion.html), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-modals",
-      "Cache-Control": "no-store",
+      "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
       "X-Robots-Tag": "noindex",
     },
   });

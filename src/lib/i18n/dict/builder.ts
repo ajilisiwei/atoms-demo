@@ -49,8 +49,8 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
     zh: "积分已用完 — 生成已暂停",
   },
   "builder.chat.placeholder.first": {
-    en: "Describe your app… (Enter to send)",
-    zh: "描述你的应用…（Enter 发送）",
+    en: "Describe your app — @ picks an agent… (Enter to send)",
+    zh: "描述你的应用，@ 可选智能体…（Enter 发送）",
   },
   "builder.chat.placeholder.change": {
     en: "Describe a change… (Enter to send)",

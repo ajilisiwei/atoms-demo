@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { ThemePicker } from "@/components/composer/ThemePicker";
+import { AgentMentionMenu } from "@/components/composer/AgentMentionMenu";
+import { useAgentMention } from "@/components/composer/useAgentMention";
 import { useT } from "@/lib/i18n";
 import type { GenerationState, UiMessage } from "./types";
 
@@ -29,6 +31,9 @@ interface ChatPanelProps {
   outOfCredits?: boolean;
   // Active built-in agent shown in the empty state
   agent?: { name: string; avatar: string } | null;
+  // @-mention agent selection (optional; enabled when onAgentChange is given).
+  agentValue?: string | null;
+  onAgentChange?: (id: string | null) => void;
 }
 
 function PlanTimeline({ steps, live }: { steps: string[]; live: boolean }) {
@@ -64,11 +69,22 @@ export function ChatPanel({
   onThemeChange,
   outOfCredits,
   agent,
+  agentValue,
+  onAgentChange,
 }: ChatPanelProps) {
   const t = useT();
   const [input, setInput] = useState("");
   const [lastRestoredAt, setLastRestoredAt] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const mention = useAgentMention({
+    text: input,
+    setText: setInput,
+    agentValue: agentValue ?? null,
+    onAgentChange,
+    textareaRef,
+  });
   const generating = generation !== null;
   const sendBlocked = generating || Boolean(outOfCredits);
   // Suggestion chips only render under the newest assistant message.
@@ -89,7 +105,7 @@ export function ChatPanel({
   }, [messages.length, generation?.planSteps.length, generation?.phase]);
 
   function submit() {
-    const value = input.trim();
+    const value = mention.prepareSubmit();
     if (!value || sendBlocked) return;
     setInput("");
     onSend(value);
@@ -203,17 +219,28 @@ export function ChatPanel({
             e.preventDefault();
             submit();
           }}
-          className="rounded-xl bg-panel border border-line p-2 focus-within:border-accent-2/50 transition-colors"
+          className="relative rounded-xl bg-panel border border-line p-2 focus-within:border-accent-2/50 transition-colors"
         >
+          {mention.menuOpen && (
+            <AgentMentionMenu
+              candidates={mention.candidates}
+              activeIndex={mention.activeIndex}
+              onSelect={mention.select}
+            />
+          )}
           <textarea
+            ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={mention.handleChange}
             onKeyDown={(e) => {
+              if (mention.handleKeyDown(e)) return;
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 submit();
               }
             }}
+            onKeyUp={mention.updateCaret}
+            onClick={mention.updateCaret}
             rows={2}
             disabled={sendBlocked}
             placeholder={

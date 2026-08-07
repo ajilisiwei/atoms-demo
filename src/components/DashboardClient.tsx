@@ -220,6 +220,8 @@ export function DashboardClient({
               disabled={creating}
               themeValue={themeName}
               onThemeChange={setThemeName}
+              agentValue={agentId}
+              onAgentChange={setAgentId}
               onSubmit={(p) => void createProject(p, themeName, agentId)}
               autoFocus
             />

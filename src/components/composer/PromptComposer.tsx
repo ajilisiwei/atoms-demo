@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useT } from "@/lib/i18n";
 import { ThemePicker } from "./ThemePicker";
+import { AgentMentionMenu } from "./AgentMentionMenu";
+import { useAgentMention } from "./useAgentMention";
 
 interface PromptComposerProps {
   placeholder: string;
@@ -11,6 +13,9 @@ interface PromptComposerProps {
   onThemeChange: (id: string | null) => void;
   onSubmit: (prompt: string) => void;
   autoFocus?: boolean;
+  // @-mention agent selection (optional; enabled when onAgentChange is given).
+  agentValue?: string | null;
+  onAgentChange?: (id: string | null) => void;
   // Builder variant: slightly tighter paddings, 2 rows.
   compact?: boolean;
 }
@@ -22,33 +27,55 @@ export function PromptComposer({
   onThemeChange,
   onSubmit,
   autoFocus,
+  agentValue,
+  onAgentChange,
   compact,
 }: PromptComposerProps) {
   const t = useT();
   const [input, setInput] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const mention = useAgentMention({
+    text: input,
+    setText: setInput,
+    agentValue: agentValue ?? null,
+    onAgentChange,
+    textareaRef,
+  });
 
   function submit() {
-    const trimmed = input.trim();
-    if (!trimmed || disabled) return;
-    onSubmit(trimmed);
+    const prompt = mention.prepareSubmit();
+    if (!prompt || disabled) return;
+    onSubmit(prompt);
     setInput("");
   }
 
   return (
     <div
-      className={`rounded-2xl border border-line bg-panel shadow-sm focus-within:border-accent-2/50 transition-colors ${
+      className={`relative rounded-2xl border border-line bg-panel shadow-sm focus-within:border-accent-2/50 transition-colors ${
         compact ? "p-1.5" : "p-2"
       }`}
     >
+      {mention.menuOpen && (
+        <AgentMentionMenu
+          candidates={mention.candidates}
+          activeIndex={mention.activeIndex}
+          onSelect={mention.select}
+        />
+      )}
       <textarea
+        ref={textareaRef}
         value={input}
-        onChange={(e) => setInput(e.target.value)}
+        onChange={mention.handleChange}
         onKeyDown={(e) => {
+          if (mention.handleKeyDown(e)) return;
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             submit();
           }
         }}
+        onKeyUp={mention.updateCaret}
+        onClick={mention.updateCaret}
         rows={compact ? 2 : 3}
         placeholder={placeholder}
         disabled={disabled}

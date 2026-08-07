@@ -422,6 +422,8 @@ export function Builder({
                 ? { name: activeAgent.name, avatar: activeAgent.avatar }
                 : null
             }
+            agentValue={agentId}
+            onAgentChange={setAgentId}
           />
         </div>
         <div className="flex-1 min-h-0">

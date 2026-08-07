@@ -6,8 +6,8 @@ export const dashboardDict: Record<string, { en: string; zh: string }> = {
     zh: "你想创造什么，{name}？",
   },
   "dashboard.composerPlaceholder": {
-    en: "Describe the app you want to build — type @ to pick an agent…",
-    zh: "描述你想构建的应用，输入 @ 可选择智能体…",
+    en: "Type @ to summon an agent, then tell it the app of your dreams…",
+    zh: "输入 @ 召唤一位智能体，让它陪你把点子变成应用…",
   },
   "dashboard.creating": {
     en: "Creating your project…",

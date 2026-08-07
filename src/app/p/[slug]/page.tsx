@@ -22,20 +22,20 @@ export default async function PublishedAppPage({ params }: Props) {
   const { slug } = await params;
   const project = await prisma.project.findUnique({
     where: { slug },
-    select: { name: true, publishedVersionId: true },
+    select: { name: true, publishedVersionId: true, updatedAt: true },
   });
   if (!project?.publishedVersionId) notFound();
 
   return (
-    <div className="fixed inset-0">
+    <div className="fixed inset-0 bg-background">
       {/* Isolation comes from the CSP `sandbox` response header on /raw
           (opaque origin). No sandbox attribute here: iframes carrying a
           sandbox attribute without allow-same-origin fail to render at all
           in some Chrome environments. */}
       <iframe
-        src={`/p/${slug}/raw`}
+        src={`/p/${slug}/raw?v=${project.updatedAt.getTime()}`}
         title={project.name}
-        className="h-full w-full border-0 bg-white"
+        className="h-full w-full border-0"
       />
       <div className="absolute bottom-3 right-3 flex items-center gap-2">
         <RemixButton slug={slug} />

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { api, ApiError } from "@/lib/client/api";
 import { useT } from "@/lib/i18n";
 import { getBuiltinAgent } from "@/lib/agents";
@@ -70,19 +70,69 @@ function RemixIcon() {
   );
 }
 
+const emptySubscribe = () => () => {};
+
 // Live thumbnail: the published document rendered at half scale inside a
 // fixed-ratio window (pointer events off so the card handles clicks).
-function LivePreview({ slug, title }: { slug: string; title: string }) {
+// A theme-following skeleton sits under the iframe, which fades in on load —
+// the document's white flash during load stays fully covered. `version`
+// cache-busts per republish so unchanged apps hit the HTTP cache.
+// The iframe mounts only after hydration: with SSR markup it starts loading
+// before React attaches listeners, and its opaque origin (CSP sandbox) makes
+// a missed load event undetectable afterwards.
+function LivePreview({
+  slug,
+  title,
+  version,
+}: {
+  slug: string;
+  title: string;
+  version: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const hydrated = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
   return (
-    <div className="relative aspect-[4/3] overflow-hidden rounded-t-2xl border-b border-line bg-white">
-      <iframe
-        src={`/p/${slug}/raw`}
-        title={title}
-        loading="lazy"
-        tabIndex={-1}
-        aria-hidden="true"
-        className="pointer-events-none absolute left-0 top-0 h-[200%] w-[200%] origin-top-left scale-50 border-0"
-      />
+    <div className="relative aspect-[4/3] overflow-hidden rounded-t-2xl border-b border-line bg-panel-2">
+      {!loaded && (
+        <div
+          className="absolute inset-0 grid place-items-center animate-pulse"
+          aria-hidden="true"
+        >
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-muted/50"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="2.5" />
+            <path d="M3 9h18" />
+            <circle cx="6.2" cy="6.5" r="0.3" />
+            <circle cx="8.7" cy="6.5" r="0.3" />
+          </svg>
+        </div>
+      )}
+      {hydrated && (
+        <iframe
+          src={`/p/${slug}/raw?v=${version}`}
+          title={title}
+          loading="lazy"
+          tabIndex={-1}
+          aria-hidden="true"
+          onLoad={() => setLoaded(true)}
+          className={`pointer-events-none absolute left-0 top-0 h-[200%] w-[200%] origin-top-left scale-50 border-0 transition-opacity duration-300 ${
+            loaded ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      )}
     </div>
   );
 }
@@ -204,7 +254,11 @@ export function DiscoverClient({
                       title={t("discover.open")}
                       className="block"
                     >
-                      <LivePreview slug={item.slug} title={item.name} />
+                      <LivePreview
+                        slug={item.slug}
+                        title={item.name}
+                        version={String(new Date(item.updatedAt).getTime())}
+                      />
                     </a>
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-2">

@@ -79,6 +79,7 @@ export function DashboardClient({
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("account");
   const [themeName, setThemeName] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
+  const [template, setTemplate] = useState("html");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ProjectListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -100,7 +101,7 @@ export function DashboardClient({
       const name = initialPrompt ? initialPrompt.slice(0, 60) : undefined;
       const { project } = await api<{ project: { id: string } }>("/api/projects", {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, template }),
       });
       if (initialPrompt) {
         sessionStorage.setItem(
@@ -222,6 +223,8 @@ export function DashboardClient({
               onThemeChange={setThemeName}
               agentValue={agentId}
               onAgentChange={setAgentId}
+              templateValue={template}
+              onTemplateChange={setTemplate}
               onSubmit={(p) => void createProject(p, themeName, agentId)}
               autoFocus
             />

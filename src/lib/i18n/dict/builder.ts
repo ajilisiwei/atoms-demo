@@ -88,6 +88,44 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
     zh: "// 还没有代码 — 发送提示词生成你的应用。",
   },
 
+  // In-browser build (react-ts projects)
+  "builder.compile.compiling": {
+    en: "Building preview…",
+    zh: "正在打包预览…",
+  },
+  "builder.compile.failedTitle": {
+    en: "Build failed",
+    zh: "构建失败",
+  },
+  "builder.compile.fix": { en: "Fix with AI", zh: "让 AI 修复" },
+  "builder.compile.viewCode": { en: "View code", zh: "查看代码" },
+  "builder.compile.notBuilt": {
+    en: "This version has no build artifact yet.",
+    zh: "该版本还没有构建产物。",
+  },
+  "builder.compile.storeFailed": {
+    en: "Failed to store the build artifact — please retry",
+    zh: "构建产物保存失败，请重试",
+  },
+
+  // Code view (file tree + read-only source)
+  "builder.files.treeLabel": { en: "Project files", zh: "项目文件" },
+  "builder.files.empty": {
+    en: "No files yet — send a prompt to generate your app.",
+    zh: "还没有文件 — 发送提示词生成你的应用。",
+  },
+  "builder.files.expand": { en: "Expand folder", zh: "展开文件夹" },
+  "builder.files.collapse": { en: "Collapse folder", zh: "收起文件夹" },
+  "builder.files.writing": { en: "Writing this file…", zh: "正在写入此文件…" },
+  "builder.files.modified": { en: "Modified", zh: "已修改" },
+  "builder.files.lines": { en: "{n} lines", zh: "{n} 行" },
+  "builder.files.copyCode": { en: "Copy code", zh: "复制代码" },
+  "builder.files.copied": { en: "Copied", zh: "已复制" },
+  "builder.files.codeEmpty": {
+    en: "Select a file to view its code.",
+    zh: "选择一个文件查看代码。",
+  },
+
   // Versions tab
   "builder.versions.viewingBanner": {
     en: "Viewing v{n} — not the latest version",

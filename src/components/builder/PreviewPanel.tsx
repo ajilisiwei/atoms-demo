@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { VersionMeta } from "@/lib/client/api";
+import type { BundleDiagnostic } from "@/lib/bundler/bundle";
 import { useT } from "@/lib/i18n";
+import { CodeView } from "./CodeView";
+import { FileTree } from "./FileTree";
+import type { ProjectFiles } from "./types";
 
 export type PanelTab = "preview" | "code" | "versions";
 
@@ -27,6 +31,16 @@ interface PreviewPanelProps {
   onViewVersion: (versionId: string) => void;
   onBackToLatest: () => void;
   onRestoreVersion: (versionId: string) => void;
+  // Multi-file (react-ts) additions
+  template: string;
+  files: ProjectFiles | null;
+  filesStreaming: boolean;
+  writingPath: string | null;
+  changedPaths: Set<string> | null;
+  compiling: boolean;
+  compileErrors: BundleDiagnostic[] | null;
+  onRequestFix: () => void;
+  previewUnavailable: boolean;
 }
 
 const TABS: { key: PanelTab; labelKey: string }[] = [
@@ -110,13 +124,32 @@ export function PreviewPanel({
   onViewVersion,
   onBackToLatest,
   onRestoreVersion,
+  template,
+  files,
+  filesStreaming,
+  writingPath,
+  changedPaths,
+  compiling,
+  compileErrors,
+  onRequestFix,
+  previewUnavailable,
 }: PreviewPanelProps) {
   const t = useT();
   const codeRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   const [deviceWidth, setDeviceWidth] = useState<DeviceWidth>("full");
   const [reloadNonce, setReloadNonce] = useState(0);
-  const streaming = streamingCode !== null;
+  const isReact = template === "react-ts";
+  const streaming = isReact ? filesStreaming : streamingCode !== null;
+
+  // Active file in the Code tab; mid-generation it follows the file being
+  // written, otherwise the user's pick (falling back to the entry file).
+  const [pickedFile, setPickedFile] = useState<string | null>(null);
+  const filePaths = files ? Object.keys(files) : [];
+  const activeFile =
+    writingPath ??
+    (pickedFile && files && pickedFile in files ? pickedFile : null) ??
+    (files && "src/main.tsx" in files ? "src/main.tsx" : filePaths[0] ?? null);
 
   // Auto-scroll the code pane while the agent streams code in.
   useEffect(() => {
@@ -312,7 +345,50 @@ export function PreviewPanel({
       )}
 
       <div className="flex-1 min-h-0 bg-background">
+        {tab === "preview" && isReact && (compiling || compileErrors || previewUnavailable) ? (
+          <div className="flex h-full items-center justify-center px-8">
+            {compiling ? (
+              <div className="flex flex-col items-center gap-3 text-muted">
+                <span className="h-2.5 w-2.5 rounded-full bg-accent animate-blink" />
+                <p className="text-sm">{t("builder.compile.compiling")}</p>
+              </div>
+            ) : compileErrors ? (
+              <div className="w-full max-w-lg rounded-2xl border border-line bg-panel p-5">
+                <p className="text-sm font-medium text-red-400">
+                  {t("builder.compile.failedTitle")}
+                </p>
+                <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-panel-2 p-3 font-mono text-xs leading-5 text-muted whitespace-pre-wrap">
+                  {compileErrors
+                    .map(
+                      (d) =>
+                        `${d.file ?? ""}${d.line !== undefined ? `:${d.line}` : ""} ${d.text}`
+                    )
+                    .join("\n")}
+                </pre>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={onRequestFix}
+                    className="rounded-lg bg-foreground px-3.5 py-1.5 text-xs font-medium text-background hover:opacity-85 transition-opacity"
+                  >
+                    {t("builder.compile.fix")}
+                  </button>
+                  <button
+                    onClick={() => onTabChange("code")}
+                    className="rounded-lg border border-line px-3.5 py-1.5 text-xs text-muted hover:text-foreground hover:bg-panel-2 transition-colors"
+                  >
+                    {t("builder.compile.viewCode")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted text-center">
+                {t("builder.compile.notBuilt")}
+              </p>
+            )}
+          </div>
+        ) : null}
         {tab === "preview" &&
+          !(isReact && (compiling || compileErrors || previewUnavailable)) &&
           (previewSrc ? (
             /* Isolation comes from the CSP `sandbox` response header on the
                raw route (opaque origin). No sandbox attribute here: iframes
@@ -379,15 +455,35 @@ export function PreviewPanel({
             </div>
           ))}
 
-        {tab === "code" && (
-          <pre
-            ref={codeRef}
-            className="h-full overflow-auto p-4 font-mono text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words"
-          >
-            {shownCode ?? t("builder.code.empty")}
-            {streaming && <span className="text-accent animate-blink">▌</span>}
-          </pre>
-        )}
+        {tab === "code" &&
+          (isReact ? (
+            <div className="flex h-full min-h-0">
+              <div className="w-56 shrink-0 overflow-y-auto border-r border-line py-2">
+                <FileTree
+                  files={files ?? {}}
+                  activePath={activeFile}
+                  onSelect={setPickedFile}
+                  writingPath={writingPath}
+                  changedPaths={changedPaths ?? undefined}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <CodeView
+                  path={activeFile}
+                  content={(activeFile && files?.[activeFile]) || ""}
+                  streaming={streaming && writingPath === activeFile}
+                />
+              </div>
+            </div>
+          ) : (
+            <pre
+              ref={codeRef}
+              className="h-full overflow-auto p-4 font-mono text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words"
+            >
+              {shownCode ?? t("builder.code.empty")}
+              {streaming && <span className="text-accent animate-blink">▌</span>}
+            </pre>
+          ))}
 
         {tab === "versions" && (
           <div className="h-full overflow-y-auto p-4">

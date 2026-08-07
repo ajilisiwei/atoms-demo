@@ -27,14 +27,23 @@ export async function GET(_req: NextRequest, { params }: Params) {
   });
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
+  // The version list above stays lightweight; only the version the builder
+  // opens carries its payload. react-ts projects hydrate from `files` (the
+  // editable sources) plus `compiledHtml` (the last build artifact), which is
+  // null until the browser has built that version.
   const latest = project.versions[0]
     ? await prisma.appVersion.findUnique({
         where: { id: project.versions[0].id },
-        select: { id: true, html: true },
+        select: { id: true, html: true, files: true, compiledHtml: true },
       })
     : null;
 
-  return NextResponse.json({ project, latestHtml: latest?.html ?? null });
+  return NextResponse.json({
+    project,
+    latestHtml: latest?.html ?? null,
+    latestFiles: latest?.files ?? null,
+    latestCompiledHtml: latest?.compiledHtml ?? null,
+  });
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {

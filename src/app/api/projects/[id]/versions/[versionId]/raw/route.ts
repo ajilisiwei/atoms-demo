@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUserId } from "@/lib/auth";
 import { injectStorageShim } from "@/lib/storage-shim";
+import { resolveVersionDocument } from "@/lib/templates";
 
 export const runtime = "nodejs";
 
@@ -19,11 +20,20 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const version = await prisma.appVersion.findFirst({
     where: { id: versionId, project: { id, userId } },
-    select: { html: true },
+    select: { html: true, compiledHtml: true, project: { select: { template: true } } },
   });
   if (!version) return NextResponse.json({ error: "Version not found" }, { status: 404 });
 
-  return new Response(injectStorageShim(version.html), {
+  const document = resolveVersionDocument({
+    template: version.project.template,
+    html: version.html,
+    compiledHtml: version.compiledHtml,
+  });
+  if (document === null) {
+    return NextResponse.json({ error: "This version has not been built yet" }, { status: 404 });
+  }
+
+  return new Response(injectStorageShim(document), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-modals",

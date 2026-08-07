@@ -38,6 +38,10 @@ export const dashboardDict: Record<string, { en: string; zh: string }> = {
 
   // Prompt composer + theme picker
   "composer.send": { en: "Send prompt", zh: "发送提示词" },
+  "composer.templateTitle": {
+    en: "App type — HTML is a single file, React is a multi-file TypeScript project",
+    zh: "应用类型 — HTML 为单文件，React 为多文件 TypeScript 工程",
+  },
   "composer.theme": { en: "Theme", zh: "主题" },
   "composer.searchThemes": { en: "Search themes…", zh: "搜索主题…" },
   "composer.noTheme": { en: "No theme", zh: "无主题" },

@@ -16,9 +16,17 @@ interface PromptComposerProps {
   // @-mention agent selection (optional; enabled when onAgentChange is given).
   agentValue?: string | null;
   onAgentChange?: (id: string | null) => void;
+  // App template toggle (optional; enabled when onTemplateChange is given).
+  templateValue?: string;
+  onTemplateChange?: (template: string) => void;
   // Builder variant: slightly tighter paddings, 2 rows.
   compact?: boolean;
 }
+
+const TEMPLATE_OPTIONS = [
+  { key: "html", label: "HTML" },
+  { key: "react-ts", label: "React" },
+];
 
 export function PromptComposer({
   placeholder,
@@ -29,6 +37,8 @@ export function PromptComposer({
   autoFocus,
   agentValue,
   onAgentChange,
+  templateValue,
+  onTemplateChange,
   compact,
 }: PromptComposerProps) {
   const t = useT();
@@ -85,7 +95,31 @@ export function PromptComposer({
         }`}
       />
       <div className="flex items-center justify-between px-1 pb-0.5">
-        <ThemePicker value={themeValue} onChange={onThemeChange} disabled={disabled} />
+        <div className="flex items-center gap-2">
+          <ThemePicker value={themeValue} onChange={onThemeChange} disabled={disabled} />
+          {onTemplateChange && (
+            <div
+              className="flex items-center rounded-full border border-line bg-panel-2/60 p-0.5 text-xs"
+              title={t("composer.templateTitle")}
+            >
+              {TEMPLATE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onTemplateChange(opt.key)}
+                  className={`rounded-full px-2.5 py-1 transition-colors disabled:opacity-50 ${
+                    (templateValue ?? "html") === opt.key
+                      ? "bg-panel text-foreground shadow-sm"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={submit}

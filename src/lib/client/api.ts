@@ -31,16 +31,23 @@ export type VersionMeta = {
 export type GenerationEvent =
   | { type: "plan_step"; text: string }
   | { type: "html_delta"; delta: string }
+  // Multi-file (react-ts) streaming: content per file, like html_delta.
+  | { type: "file_start"; path: string }
+  | { type: "file_delta"; path: string; delta: string }
+  | { type: "file_end"; path: string; bytes: number }
   | { type: "summary"; text: string }
   | { type: "suggestions"; items: string[] }
   | {
       type: "done";
-      version: VersionMeta;
+      // null on a no-change react-ts turn (conversational reply, no version)
+      version: VersionMeta | null;
       summary: string;
       planSteps: string[];
       suggestions?: string[];
       creditsSpent?: number;
       creditsRemaining?: number;
+      // react-ts only: which paths this generation changed/deleted
+      files?: { changed: string[]; deleted: string[] };
     }
   | { type: "error"; message: string };
 

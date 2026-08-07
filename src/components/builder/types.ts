@@ -8,6 +8,9 @@ export interface UiMessage {
   suggestions?: string[] | null;
 }
 
+// Flat file snapshot of a multi-file (react-ts) project: path -> content.
+export type ProjectFiles = Record<string, string>;
+
 export interface BuilderProject {
   id: string;
   name: string;
@@ -15,6 +18,7 @@ export interface BuilderProject {
   publishedVersionId: string | null;
   themeName: string | null;
   agentId: string | null;
+  template: string;
 }
 
 export interface GenerationState {

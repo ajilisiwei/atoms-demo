@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUserId } from "@/lib/auth";
+import { isProjectTemplate, PROJECT_TEMPLATES } from "@/lib/templates";
 
 export const runtime = "nodejs";
 
@@ -28,13 +29,22 @@ export async function POST(req: NextRequest) {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { name?: string } = {};
+  let body: { name?: string; template?: string } = {};
   try {
     body = await req.json();
   } catch {
-    // empty body is fine — default name is used
+    // empty body is fine — defaults are used
   }
   const name = (body.name ?? "Untitled App").trim().slice(0, 80) || "Untitled App";
+  // The generation target is fixed at creation time: it decides the system
+  // prompt and how versions store their output.
+  const template = body.template ?? "html";
+  if (!isProjectTemplate(template)) {
+    return NextResponse.json(
+      { error: `template must be one of: ${PROJECT_TEMPLATES.join(", ")}` },
+      { status: 400 }
+    );
+  }
 
   const count = await prisma.project.count({ where: { userId } });
   if (count >= 50) {
@@ -42,8 +52,8 @@ export async function POST(req: NextRequest) {
   }
 
   const project = await prisma.project.create({
-    data: { userId, name },
-    select: { id: true, name: true, createdAt: true },
+    data: { userId, name, template },
+    select: { id: true, name: true, template: true, createdAt: true },
   });
   return NextResponse.json({ project }, { status: 201 });
 }

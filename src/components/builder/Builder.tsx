@@ -8,16 +8,22 @@ import { AUTORUN_PREFIX } from "@/components/DashboardClient";
 import { getBuiltinAgent } from "@/lib/agents";
 import { useT } from "@/lib/i18n";
 import { LogoMark } from "@/components/Logo";
+import { assembleDocument } from "@/lib/bundler/assemble";
+import { bundleFiles, ensureEsbuild, type BundleDiagnostic } from "@/lib/bundler/bundle";
 import { ChatPanel, type RestoredInput } from "./ChatPanel";
 import { PreviewPanel, type PanelTab } from "./PreviewPanel";
 import { PublishDialog } from "./PublishDialog";
-import type { BuilderProject, GenerationState, UiMessage } from "./types";
+import type { BuilderProject, GenerationState, ProjectFiles, UiMessage } from "./types";
 
 interface BuilderProps {
   initialProject: BuilderProject;
   initialMessages: UiMessage[];
   initialVersions: VersionMeta[];
   initialHtml: string | null;
+  initialFiles: ProjectFiles | null;
+  // Latest react-ts version exists but its compiledHtml was never stored
+  // (e.g. the tab closed before the browser build finished).
+  initialArtifactMissing?: boolean;
   initialCredits: number;
 }
 
@@ -26,6 +32,8 @@ export function Builder({
   initialMessages,
   initialVersions,
   initialHtml,
+  initialFiles,
+  initialArtifactMissing,
   initialCredits,
 }: BuilderProps) {
   const t = useT();
@@ -48,11 +56,29 @@ export function Builder({
   // Not persisted — resets to expanded on reload.
   const [chatCollapsed, setChatCollapsed] = useState(false);
 
+  // Multi-file (react-ts) state. `files` is the latest snapshot; viewing a
+  // historical version swaps in `viewingFiles` without touching it.
+  const isReact = initialProject.template === "react-ts";
+  const [files, setFiles] = useState<ProjectFiles | null>(initialFiles);
+  const [viewingFiles, setViewingFiles] = useState<ProjectFiles | null>(null);
+  const [viewingBuilt, setViewingBuilt] = useState(true);
+  const [streamingFiles, setStreamingFiles] = useState<ProjectFiles | null>(null);
+  const [writingPath, setWritingPath] = useState<string | null>(null);
+  const [changedPaths, setChangedPaths] = useState<Set<string> | null>(null);
+  const [compiling, setCompiling] = useState(false);
+  const [compileErrors, setCompileErrors] = useState<BundleDiagnostic[] | null>(null);
+
   const htmlBufRef = useRef("");
+  const filesBufRef = useRef<ProjectFiles>({});
   const generatingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
   const autoStarted = useRef(false);
+
+  // Prewarm the wasm compiler while the user reads/types.
+  useEffect(() => {
+    if (isReact) void ensureEsbuild().catch(() => {});
+  }, [isReact]);
 
   // Declared before the autorun effect so its setup runs first on every
   // (Strict Mode) remount, keeping mountedRef accurate at timer-fire time.
@@ -65,6 +91,67 @@ export function Builder({
   }, []);
 
   const hasVersions = versions.length > 0;
+
+  // Bundle the snapshot in the browser, store the artifact on the version,
+  // then reveal the preview (the raw route serves compiledHtml). While
+  // `compiling` is true the preview pane shows a placeholder, which also
+  // covers the window before the PATCH lands.
+  const compileAndStore = useCallback(
+    async (snapshot: ProjectFiles, versionId: string) => {
+      setCompiling(true);
+      setCompileErrors(null);
+      try {
+        const result = await bundleFiles(snapshot);
+        if (!mountedRef.current) return;
+        if (!result.ok) {
+          setCompileErrors(result.errors);
+          setTab("code");
+          return;
+        }
+        const html = assembleDocument({
+          js: result.js,
+          css: result.css,
+          title: project.name,
+        });
+        await api(`/api/projects/${project.id}/versions/${versionId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ compiledHtml: html }),
+        });
+        if (!mountedRef.current) return;
+        setTab("preview");
+      } catch (err) {
+        if (mountedRef.current) {
+          setCompileErrors([
+            {
+              text:
+                err instanceof ApiError
+                  ? err.message
+                  : t("builder.compile.storeFailed"),
+            },
+          ]);
+        }
+      } finally {
+        if (mountedRef.current) setCompiling(false);
+      }
+    },
+    [project.id, project.name, t]
+  );
+
+  // Rebuild a missing artifact on open (e.g. the tab closed mid-build).
+  const rebuildStarted = useRef(false);
+  useEffect(() => {
+    if (rebuildStarted.current) return;
+    if (!isReact || !initialArtifactMissing || !initialFiles) return;
+    const latestId = initialVersions[0]?.id;
+    if (!latestId) return;
+    rebuildStarted.current = true;
+    // Deferred so no state updates happen synchronously inside the effect;
+    // mountedRef guards the Strict Mode remount window.
+    setTimeout(() => {
+      if (mountedRef.current) void compileAndStore(initialFiles, latestId);
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const send = useCallback(
     async (
@@ -81,15 +168,31 @@ export function Builder({
       setError(null);
       setViewing(null);
       setViewingHtml(null);
+      setViewingFiles(null);
       setGeneration({ planSteps: [], phase: "planning", htmlLength: 0 });
       htmlBufRef.current = "";
-      setStreamingCode("");
+      filesBufRef.current = {};
+      setStreamingCode(isReact ? null : "");
+      setStreamingFiles(isReact ? {} : null);
+      setWritingPath(null);
+      setCompileErrors(null);
       setTab("code");
 
       // Throttled flush of the streamed code into React state.
       const flushTimer = setInterval(() => {
-        setStreamingCode(htmlBufRef.current);
-        setGeneration((g) => (g ? { ...g, htmlLength: htmlBufRef.current.length } : g));
+        if (isReact) {
+          setStreamingFiles({ ...filesBufRef.current });
+          const total = Object.values(filesBufRef.current).reduce(
+            (n, c) => n + c.length,
+            0
+          );
+          setGeneration((g) => (g ? { ...g, htmlLength: total } : g));
+        } else {
+          setStreamingCode(htmlBufRef.current);
+          setGeneration((g) =>
+            g ? { ...g, htmlLength: htmlBufRef.current.length } : g
+          );
+        }
       }, 400);
 
       let failure: string | null = null;
@@ -110,6 +213,20 @@ export function Builder({
                   g && g.phase === "planning" ? { ...g, phase: "coding" } : g
                 );
                 break;
+              case "file_start":
+                filesBufRef.current[ev.path] = "";
+                setWritingPath(ev.path);
+                setGeneration((g) =>
+                  g && g.phase === "planning" ? { ...g, phase: "coding" } : g
+                );
+                break;
+              case "file_delta":
+                filesBufRef.current[ev.path] =
+                  (filesBufRef.current[ev.path] ?? "") + ev.delta;
+                break;
+              case "file_end":
+                setWritingPath((p) => (p === ev.path ? null : p));
+                break;
               case "summary":
                 setGeneration((g) => (g ? { ...g, phase: "finishing" } : g));
                 break;
@@ -117,7 +234,6 @@ export function Builder({
                 // Carried on the done event as well; nothing to do mid-stream.
                 break;
               case "done": {
-                const html = htmlBufRef.current;
                 const stamp = Date.now();
                 setMessages((prev) => [
                   ...prev,
@@ -130,11 +246,27 @@ export function Builder({
                     suggestions: ev.suggestions?.length ? ev.suggestions : null,
                   },
                 ]);
-                setVersions((prev) => [ev.version, ...prev]);
-                setCurrentHtml(html);
-                setTab("preview");
                 if (typeof ev.creditsRemaining === "number") {
                   setCredits(ev.creditsRemaining);
+                }
+                if (ev.version === null) {
+                  // No-change turn: just a conversational reply.
+                  setTab(hasVersions ? "preview" : "code");
+                  break;
+                }
+                setVersions((prev) => [ev.version!, ...prev]);
+                if (isReact) {
+                  // Mirror the server-side merge: changed files over the
+                  // previous snapshot, minus deletions.
+                  const changed = { ...filesBufRef.current };
+                  const merged: ProjectFiles = { ...(files ?? {}), ...changed };
+                  for (const p of ev.files?.deleted ?? []) delete merged[p];
+                  setFiles(merged);
+                  setChangedPaths(new Set(Object.keys(changed)));
+                  void compileAndStore(merged, ev.version.id);
+                } else {
+                  setCurrentHtml(htmlBufRef.current);
+                  setTab("preview");
                 }
                 break;
               }
@@ -156,6 +288,8 @@ export function Builder({
         generatingRef.current = false;
         if (mountedRef.current) {
           setStreamingCode(null);
+          setStreamingFiles(null);
+          setWritingPath(null);
           setGeneration(null);
         }
       }
@@ -165,7 +299,7 @@ export function Builder({
         setTab(hasVersions ? "preview" : "code");
       }
     },
-    [project.id, hasVersions, themeName, agentId, t]
+    [project.id, hasVersions, themeName, agentId, isReact, files, compileAndStore, t]
   );
 
   // Auto-run the prompt carried over from the landing page / dashboard.
@@ -227,11 +361,20 @@ export function Builder({
 
   async function viewVersion(versionId: string) {
     try {
-      const { version } = await api<{ version: VersionMeta & { html: string } }>(
-        `/api/projects/${project.id}/versions/${versionId}`
-      );
+      const { version } = await api<{
+        version: VersionMeta & {
+          html: string;
+          files?: ProjectFiles | null;
+          compiledHtml?: string | null;
+        };
+      }>(`/api/projects/${project.id}/versions/${versionId}`);
       setViewing({ id: version.id, number: version.number });
-      setViewingHtml(version.html);
+      if (isReact) {
+        setViewingFiles(version.files ?? null);
+        setViewingBuilt(Boolean(version.compiledHtml));
+      } else {
+        setViewingHtml(version.html);
+      }
       setTab("preview");
     } catch (err) {
       setError(
@@ -243,6 +386,8 @@ export function Builder({
   function backToLatest() {
     setViewing(null);
     setViewingHtml(null);
+    setViewingFiles(null);
+    setViewingBuilt(true);
   }
 
   async function restoreVersion(versionId: string) {
@@ -264,7 +409,13 @@ export function Builder({
           planSteps: null,
         },
       ]);
-      if (viewingHtml) setCurrentHtml(viewingHtml);
+      if (isReact) {
+        // The server copied files/compiledHtml onto the new version.
+        if (viewingFiles) setFiles(viewingFiles);
+        setChangedPaths(null);
+      } else if (viewingHtml) {
+        setCurrentHtml(viewingHtml);
+      }
       backToLatest();
     } catch (err) {
       setError(
@@ -282,6 +433,25 @@ export function Builder({
     ? `/api/projects/${project.id}/versions/${previewVersionId}/raw`
     : null;
   const publishTargetId = viewing?.id ?? latestVersion?.id ?? null;
+
+  // Files shown in the Code tab: mid-generation the streamed changes overlay
+  // the previous snapshot; otherwise the viewed version or the latest.
+  const displayFiles = streamingFiles
+    ? { ...(files ?? {}), ...streamingFiles }
+    : viewing
+      ? viewingFiles
+      : files;
+
+  function requestFix() {
+    if (!compileErrors?.length) return;
+    const diag = compileErrors
+      .map(
+        (d) =>
+          `${d.file ?? ""}${d.line !== undefined ? `:${d.line}` : ""} ${d.text}`
+      )
+      .join("\n");
+    void send(`The app fails to compile. Fix these build errors:\n${diag}`);
+  }
 
   return (
     <div className="flex h-dvh flex-col">
@@ -439,6 +609,15 @@ export function Builder({
             onViewVersion={(id) => void viewVersion(id)}
             onBackToLatest={backToLatest}
             onRestoreVersion={(id) => void restoreVersion(id)}
+            template={project.template}
+            files={displayFiles}
+            filesStreaming={streamingFiles !== null}
+            writingPath={writingPath}
+            changedPaths={changedPaths}
+            compiling={compiling}
+            compileErrors={compileErrors}
+            onRequestFix={requestFix}
+            previewUnavailable={isReact && Boolean(viewing) && !viewingBuilt}
           />
         </div>
       </div>

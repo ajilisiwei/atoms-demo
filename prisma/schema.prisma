@@ -52,6 +52,8 @@ model Project {
   userId             String
   user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name               String
+  // Generation target: "html" (single self-contained document) | "react-ts" (multi-file app)
+  template           String       @default("html")
   // Generation theme id (see src/lib/themes.ts); null = no theme constraint
   themeName          String?
   // Built-in agent persona id (see src/lib/agents.ts); null = default builder
@@ -92,7 +94,12 @@ model AppVersion {
   projectId     String
   project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   number        Int
+  // Single-document output for "html" projects; empty string for "react-ts"
   html          String
+  // Full file snapshot { path: content } for "react-ts" projects
+  files         Json?
+  // Browser-built bundle for "react-ts" projects, used by preview and publishing
+  compiledHtml  String?
   promptSummary String
   createdAt     DateTime @default(now())
   publishedFor  Project? @relation("PublishedVersion")

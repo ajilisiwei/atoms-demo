@@ -33,6 +33,12 @@ export async function POST(_req: NextRequest, { params }: Params) {
         projectId: id,
         number: (latest?.number ?? 0) + 1,
         html: source.html,
+        // A react-ts restore must carry the sources and the build artifact
+        // across, or the restored version would render as an empty app.
+        // Prisma rejects a literal null for a Json? column, and leaving the
+        // field unset stores the same NULL that html versions already have.
+        files: source.files ?? undefined,
+        compiledHtml: source.compiledHtml,
         promptSummary: `Restored from v${source.number}`,
       },
       select: { id: true, number: true, promptSummary: true, createdAt: true },

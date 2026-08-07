@@ -5,6 +5,16 @@ import { Builder } from "@/components/builder/Builder";
 
 export const metadata = { title: "Builder — Atomlet" };
 
+// AppVersion.files is untyped JSON; keep only the string entries so the
+// builder is handed a clean { path: content } map or nothing at all.
+function toProjectFiles(stored: unknown): Record<string, string> | null {
+  if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return null;
+  const entries = Object.entries(stored).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string"
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : null;
+}
+
 export default async function BuilderPage({
   params,
 }: {
@@ -31,7 +41,7 @@ export default async function BuilderPage({
   const latest = latestId
     ? await prisma.appVersion.findUnique({
         where: { id: latestId },
-        select: { html: true },
+        select: { html: true, files: true, compiledHtml: true },
       })
     : null;
 
@@ -41,6 +51,7 @@ export default async function BuilderPage({
       initialProject={{
         id: project.id,
         name: project.name,
+        template: project.template,
         slug: project.slug,
         publishedVersionId: project.publishedVersionId,
         themeName: project.themeName,
@@ -60,6 +71,10 @@ export default async function BuilderPage({
         createdAt: v.createdAt.toISOString(),
       }))}
       initialHtml={latest?.html ?? null}
+      initialFiles={toProjectFiles(latest?.files)}
+      initialArtifactMissing={Boolean(
+        project.template === "react-ts" && latest && !latest.compiledHtml
+      )}
     />
   );
 }

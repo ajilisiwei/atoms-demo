@@ -125,7 +125,7 @@ function StudioThemeSelect({
         </svg>
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-[70] mt-1.5 max-h-80 w-64 overflow-y-auto rounded-2xl border border-line bg-panel py-1 shadow-xl">
+        <div className="absolute left-0 top-full z-[70] mt-1.5 max-h-80 w-64 overflow-y-auto overscroll-contain rounded-2xl border border-line bg-panel py-1 shadow-xl">
           <p className="px-3.5 pb-1 pt-2 text-xs text-muted">
             {t("theme.studio.builtinGroup")}
           </p>

@@ -209,7 +209,7 @@ export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
             autoFocus
             className="m-2 rounded-lg bg-panel-2 px-3 py-2 text-sm outline-none w-[calc(100%-1rem)] placeholder:text-muted"
           />
-          <div className="max-h-64 overflow-y-auto pb-1">
+          <div className="max-h-64 overflow-y-auto overscroll-contain pb-1">
             <button
               type="button"
               onClick={() => choose(null)}

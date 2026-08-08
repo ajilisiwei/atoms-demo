@@ -266,12 +266,11 @@ export function FileTree({
   const paths = useMemo(() => Object.keys(files), [files]);
   const tree = useMemo(() => buildNodes(paths, ""), [paths]);
 
-  // Derived, never stored: the directories leading to the streaming and the
-  // selected file stay open regardless of what the user collapsed.
-  const forcedOpen = useMemo(
-    () => new Set([...ancestorDirs(writingPath), ...ancestorDirs(activePath)]),
-    [writingPath, activePath]
-  );
+  // Derived, never stored: only the streaming file's directories are forced
+  // open (so generation stays visible). The active file's ancestors are NOT
+  // forced — otherwise a user could never collapse the directory holding the
+  // current selection (e.g. the top-level "src").
+  const forcedOpen = useMemo(() => new Set(ancestorDirs(writingPath)), [writingPath]);
 
   function toggleDir(path: string) {
     setCollapsed((prev) => {

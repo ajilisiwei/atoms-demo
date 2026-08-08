@@ -121,6 +121,25 @@ const IFRAME_CLASS: Record<DeviceWidth, string> = {
   sm: "w-[390px] max-w-full h-full border-x border-line",
 };
 
+function PanelLeftIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M9.5 4v16" />
+    </svg>
+  );
+}
+
 function EditorHeader({
   path,
   editable,
@@ -198,6 +217,7 @@ export function PreviewPanel({
 
   // File-name filter above the tree (the in-buffer search is Cmd/Ctrl-F).
   const [fileQuery, setFileQuery] = useState("");
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
   const treeFiles = useMemo(() => {
     if (!files) return {};
     const q = fileQuery.trim().toLowerCase();
@@ -492,25 +512,48 @@ export function PreviewPanel({
         {tab === "code" &&
           (isReact ? (
             <div className="flex h-full min-h-0">
-              <div className="flex w-56 shrink-0 flex-col border-r border-line">
-                <div className="border-b border-line p-2">
-                  <input
-                    value={fileQuery}
-                    onChange={(e) => setFileQuery(e.target.value)}
-                    placeholder={t("builder.files.search")}
-                    className="w-full rounded-lg border border-line bg-panel px-2.5 py-1.5 text-xs outline-none placeholder:text-muted focus:border-accent-2/50 transition-colors"
-                  />
+              {treeCollapsed ? (
+                <div className="flex w-10 shrink-0 flex-col items-center border-r border-line pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setTreeCollapsed(false)}
+                    title={t("builder.files.expandPanel")}
+                    aria-label={t("builder.files.expandPanel")}
+                    className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-panel-2 hover:text-foreground transition-colors"
+                  >
+                    <PanelLeftIcon />
+                  </button>
                 </div>
-                <div className="flex-1 overflow-y-auto py-2">
-                  <FileTree
-                    files={treeFiles}
-                    activePath={activeFile}
-                    onSelect={setPickedFile}
-                    writingPath={writingPath}
-                    changedPaths={changedPaths ?? undefined}
-                  />
+              ) : (
+                <div className="flex w-56 shrink-0 flex-col border-r border-line">
+                  <div className="flex items-center gap-1.5 border-b border-line p-2">
+                    <button
+                      type="button"
+                      onClick={() => setTreeCollapsed(true)}
+                      title={t("builder.files.collapsePanel")}
+                      aria-label={t("builder.files.collapsePanel")}
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-panel-2 hover:text-foreground transition-colors"
+                    >
+                      <PanelLeftIcon />
+                    </button>
+                    <input
+                      value={fileQuery}
+                      onChange={(e) => setFileQuery(e.target.value)}
+                      placeholder={t("builder.files.search")}
+                      className="w-full min-w-0 rounded-lg border border-line bg-panel px-2.5 py-1.5 text-xs outline-none placeholder:text-muted focus:border-accent-2/50 transition-colors"
+                    />
+                  </div>
+                  <div className="flex-1 overflow-y-auto py-2">
+                    <FileTree
+                      files={treeFiles}
+                      activePath={activeFile}
+                      onSelect={setPickedFile}
+                      writingPath={writingPath}
+                      changedPaths={changedPaths ?? undefined}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="flex min-w-0 flex-1 flex-col">
                 <EditorHeader
                   path={activeFile}

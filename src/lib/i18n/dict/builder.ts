@@ -140,6 +140,27 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
   },
   "builder.chat.detachFile": { en: "Remove attachment", zh: "移除引用" },
 
+  // Editor settings
+  "builder.editorSettings.title": { en: "Editor settings", zh: "编辑器设置" },
+  "builder.editorSettings.fontSize": { en: "Font size", zh: "字号" },
+  "builder.editorSettings.fontFamily": { en: "Font", zh: "字体" },
+  "builder.editorSettings.fontSystem": { en: "System", zh: "系统" },
+  "builder.editorSettings.fontClean": { en: "Clean", zh: "简洁" },
+  "builder.editorSettings.fontClassic": { en: "Classic", zh: "经典" },
+  "builder.editorSettings.lineHeight": { en: "Line height", zh: "行高" },
+  "builder.editorSettings.compact": { en: "Compact", zh: "紧凑" },
+  "builder.editorSettings.normal": { en: "Normal", zh: "标准" },
+  "builder.editorSettings.relaxed": { en: "Relaxed", zh: "宽松" },
+  "builder.editorSettings.tabSize": { en: "Indent width", zh: "缩进宽度" },
+  "builder.editorSettings.lineWrap": { en: "Word wrap", zh: "自动换行" },
+  "builder.editorSettings.on": { en: "On", zh: "开" },
+  "builder.editorSettings.off": { en: "Off", zh: "关" },
+  "builder.editorSettings.theme": { en: "Editor theme", zh: "编辑器主题" },
+  "builder.editorSettings.themeAuto": { en: "Auto", zh: "跟随" },
+  "builder.editorSettings.themeLight": { en: "Light", zh: "亮色" },
+  "builder.editorSettings.themeDark": { en: "Dark", zh: "暗色" },
+  "builder.editorSettings.reset": { en: "Reset to defaults", zh: "恢复默认" },
+
   // Console panel
   "builder.console.title": { en: "Console", zh: "控制台" },
   "builder.console.toggle": { en: "Toggle console", zh: "打开/关闭控制台" },

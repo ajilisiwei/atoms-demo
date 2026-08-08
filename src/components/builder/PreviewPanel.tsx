@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { InputDialog } from "@/components/InputDialog";
 import { CodeEditor } from "./CodeEditor";
 import { ConsolePanel, type ConsoleEntry } from "./ConsolePanel";
+import { EditorSettingsPanel } from "./EditorSettingsPanel";
 import { FileTree, fileDotClass, type TreeActions } from "./FileTree";
 import { ResizeHandle, useResizableWidth } from "./useResizable";
 import type { ProjectFiles } from "./types";
@@ -143,6 +144,43 @@ const IFRAME_CLASS: Record<DeviceWidth, string> = {
   md: "w-[768px] max-w-full h-full border-x border-line",
   sm: "w-[390px] max-w-full h-full border-x border-line",
 };
+
+function GearButton({
+  onOpen,
+  title,
+}: {
+  onOpen: (anchor: { x: number; y: number }) => void;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={(e) => {
+        // Keep this click from instantly closing the panel it opens.
+        e.nativeEvent.stopImmediatePropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        onOpen({ x: rect.right + 8, y: rect.top - 4 });
+      }}
+      className="mt-auto mb-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-panel-2 hover:text-foreground transition-colors"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.01a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z" />
+      </svg>
+    </button>
+  );
+}
 
 function ConsoleButton({
   open,
@@ -404,6 +442,7 @@ export function PreviewPanel({
     isDir: boolean;
   } | null>(null);
   const [treeDelete, setTreeDelete] = useState<{ path: string; isDir: boolean } | null>(null);
+  const [settingsAnchor, setSettingsAnchor] = useState<{ x: number; y: number } | null>(null);
   // Freshly created folders with no files yet (ephemeral, this session only).
   const [extraDirs, setExtraDirs] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -828,6 +867,10 @@ export function PreviewPanel({
                     onToggle={onToggleConsole}
                     title={t("builder.console.toggle")}
                   />
+                  <GearButton
+                    onOpen={setSettingsAnchor}
+                    title={t("builder.editorSettings.title")}
+                  />
                 </div>
                 {!treeCollapsed && (
                   <>
@@ -901,6 +944,10 @@ export function PreviewPanel({
                     unseenError={consoleUnseenError}
                     onToggle={onToggleConsole}
                     title={t("builder.console.toggle")}
+                  />
+                  <GearButton
+                    onOpen={setSettingsAnchor}
+                    title={t("builder.editorSettings.title")}
                   />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col">
@@ -1031,6 +1078,12 @@ export function PreviewPanel({
         {...{ webkitdirectory: "" }}
         onChange={(e) => void handleUploadChange(e, true)}
       />
+      {settingsAnchor && (
+        <EditorSettingsPanel
+          anchor={settingsAnchor}
+          onClose={() => setSettingsAnchor(null)}
+        />
+      )}
     </div>
   );
 }

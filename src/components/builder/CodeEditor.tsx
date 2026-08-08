@@ -16,6 +16,11 @@ import { javascript } from "@codemirror/lang-javascript";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { oneDark } from "@codemirror/theme-one-dark";
+import {
+  FONT_STACKS,
+  useEditorSettings,
+  type EditorSettings,
+} from "@/lib/editor-settings";
 
 // Marks programmatic document syncs so they do not echo through onChange.
 const remoteSync = Annotation.define<boolean>();
@@ -46,11 +51,42 @@ function isDarkAppearance(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-const sizing = EditorView.theme({
-  "&": { height: "100%", fontSize: "12px", backgroundColor: "transparent" },
-  ".cm-scroller": { fontFamily: "var(--font-mono, ui-monospace, monospace)", lineHeight: "1.6" },
-  "&.cm-focused": { outline: "none" },
-});
+function darkFor(settings: EditorSettings): boolean {
+  if (settings.theme === "dark") return true;
+  if (settings.theme === "light") return false;
+  return isDarkAppearance();
+}
+
+function typographyOf(settings: EditorSettings): Extension {
+  // In "auto" the editor blends into the app panel (transparent); a forced
+  // scheme needs its own background — transparent here would override
+  // oneDark's and produce dark text on a light panel (or vice versa).
+  const background =
+    settings.theme === "auto"
+      ? "transparent"
+      : settings.theme === "light"
+        ? "#ffffff"
+        : null; // dark: let oneDark's own background win
+  return EditorView.theme({
+    "&": {
+      height: "100%",
+      fontSize: `${settings.fontSize}px`,
+      backgroundColor: background,
+    },
+    ".cm-scroller": {
+      fontFamily: FONT_STACKS[settings.fontFamily],
+      lineHeight: String(settings.lineHeight),
+    },
+    "&.cm-focused": { outline: "none" },
+  });
+}
+
+function behaviorOf(settings: EditorSettings): Extension {
+  return [
+    EditorState.tabSize.of(settings.tabSize),
+    settings.lineWrap ? EditorView.lineWrapping : [],
+  ];
+}
 
 export function CodeEditor({
   path,
@@ -72,16 +108,25 @@ export function CodeEditor({
   });
   const themeComp = useRef(new Compartment());
   const readOnlyComp = useRef(new Compartment());
+  const typographyComp = useRef(new Compartment());
+  const behaviorComp = useRef(new Compartment());
   const pathRef = useRef(path);
+  const settings = useEditorSettings();
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  });
 
   function buildState(doc: string, forPath: string | null): EditorState {
+    const s = settingsRef.current;
     return EditorState.create({
       doc,
       extensions: [
         basicSetup,
-        sizing,
+        typographyComp.current.of(typographyOf(s)),
+        behaviorComp.current.of(behaviorOf(s)),
         languageFor(forPath),
-        themeComp.current.of(isDarkAppearance() ? oneDark : []),
+        themeComp.current.of(darkFor(s) ? oneDark : []),
         readOnlyComp.current.of(EditorState.readOnly.of(Boolean(readOnly))),
         EditorView.updateListener.of((u) => {
           // Only user-driven edits reach onChange; programmatic syncs are
@@ -100,7 +145,9 @@ export function CodeEditor({
     viewRef.current = view;
     const observer = new MutationObserver(() => {
       view.dispatch({
-        effects: themeComp.current.reconfigure(isDarkAppearance() ? oneDark : []),
+        effects: themeComp.current.reconfigure(
+          darkFor(settingsRef.current) ? oneDark : []
+        ),
       });
     });
     observer.observe(document.documentElement, {
@@ -114,6 +161,17 @@ export function CodeEditor({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Live-apply settings changes to the mounted editor.
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: [
+        typographyComp.current.reconfigure(typographyOf(settings)),
+        behaviorComp.current.reconfigure(behaviorOf(settings)),
+        themeComp.current.reconfigure(darkFor(settings) ? oneDark : []),
+      ],
+    });
+  }, [settings]);
 
   // Switching files gets a fresh state (own undo history); external value
   // updates for the same file are applied as a remote-annotated change.

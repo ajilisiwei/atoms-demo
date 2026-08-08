@@ -5,11 +5,16 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         // Uploaded buddy avatars live in Vercel Blob; each store gets its own
-        // subdomain, so the pattern matches the store rather than one host.
+        // single-label subdomain, so one wildcard segment covers it.
         protocol: "https",
-        hostname: "**.public.blob.vercel-storage.com",
+        hostname: "*.public.blob.vercel-storage.com",
       },
     ],
+    // Dev-only: fake-IP proxy setups resolve public hostnames to 198.18.x.x,
+    // which trips the optimizer's SSRF guard. Production keeps the guard.
+    ...(process.env.NODE_ENV === "development"
+      ? { dangerouslyAllowLocalIP: true }
+      : {}),
   },
   async headers() {
     return [

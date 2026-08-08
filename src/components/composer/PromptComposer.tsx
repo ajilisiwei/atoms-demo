@@ -23,9 +23,10 @@ interface PromptComposerProps {
   compact?: boolean;
 }
 
+// Labels are plain-language (not tech stacks) — see composer.template.* keys.
 const TEMPLATE_OPTIONS = [
-  { key: "html", label: "HTML" },
-  { key: "react-ts", label: "React" },
+  { key: "html", labelKey: "composer.template.simple" },
+  { key: "react-ts", labelKey: "composer.template.advanced" },
 ];
 
 export function PromptComposer({
@@ -114,7 +115,7 @@ export function PromptComposer({
                       : "text-muted hover:text-foreground"
                   }`}
                 >
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </button>
               ))}
             </div>

@@ -10,8 +10,9 @@ import { useT } from "@/lib/i18n";
 import { LogoMark } from "@/components/Logo";
 import { assembleDocument } from "@/lib/bundler/assemble";
 import { bundleFiles, ensureEsbuild, type BundleDiagnostic } from "@/lib/bundler/bundle";
+import { downloadHtmlProject, downloadReactProject } from "@/lib/download";
 import { ChatPanel, type RestoredInput } from "./ChatPanel";
-import { PreviewPanel, type PanelTab } from "./PreviewPanel";
+import { PreviewPanel, type PanelTab, type SaveState } from "./PreviewPanel";
 import { PublishDialog } from "./PublishDialog";
 import type { BuilderProject, GenerationState, ProjectFiles, UiMessage } from "./types";
 
@@ -67,6 +68,11 @@ export function Builder({
   const [changedPaths, setChangedPaths] = useState<Set<string> | null>(null);
   const [compiling, setCompiling] = useState(false);
   const [compileErrors, setCompileErrors] = useState<BundleDiagnostic[] | null>(null);
+  // Cloud editing: debounced saves of manual edits to the latest version.
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [previewNonce, setPreviewNonce] = useState(0);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<{ files?: ProjectFiles; html?: string } | null>(null);
 
   const htmlBufRef = useRef("");
   const filesBufRef = useRef<ProjectFiles>({});
@@ -442,6 +448,71 @@ export function Builder({
       ? viewingFiles
       : files;
 
+  // ---- Cloud editing (latest version only) -------------------------------
+  const editable = !viewing && generation === null && !compiling && hasVersions;
+
+  function scheduleSave(payload: { files?: ProjectFiles; html?: string }) {
+    pendingSaveRef.current = payload;
+    setSaveState("saving");
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => void flushSave(), 900);
+  }
+
+  async function flushSave() {
+    const payload = pendingSaveRef.current;
+    const versionId = versions[0]?.id;
+    if (!payload || !versionId) return;
+    pendingSaveRef.current = null;
+    try {
+      if (payload.files) {
+        // Store sources even when the build fails, so edits are never lost;
+        // the artifact only updates on a green build.
+        const result = await bundleFiles(payload.files);
+        if (!mountedRef.current) return;
+        const body: Record<string, unknown> = { files: payload.files };
+        if (result.ok) {
+          body.compiledHtml = assembleDocument({
+            js: result.js,
+            css: result.css,
+            title: project.name,
+          });
+        }
+        await api(`/api/projects/${project.id}/versions/${versionId}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        if (!mountedRef.current) return;
+        setCompileErrors(result.ok ? null : result.errors);
+        if (result.ok) setPreviewNonce((n) => n + 1);
+      } else if (payload.html !== undefined) {
+        await api(`/api/projects/${project.id}/versions/${versionId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ html: payload.html }),
+        });
+        if (!mountedRef.current) return;
+        setPreviewNonce((n) => n + 1);
+      }
+      // A newer edit may have arrived while this save was in flight.
+      if (pendingSaveRef.current) return;
+      setSaveState("saved");
+    } catch {
+      if (mountedRef.current) setSaveState("error");
+    }
+  }
+
+  function handleFileEdit(path: string, content: string) {
+    if (!editable || !files) return;
+    const next = { ...files, [path]: content };
+    setFiles(next);
+    scheduleSave({ files: next });
+  }
+
+  function handleHtmlEdit(html: string) {
+    if (!editable) return;
+    setCurrentHtml(html);
+    scheduleSave({ html });
+  }
+
   function requestFix() {
     if (!compileErrors?.length) return;
     const diag = compileErrors
@@ -546,6 +617,35 @@ export function Builder({
           className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none rounded-md px-2 py-1 hover:bg-panel-2 focus:bg-panel-2 transition-colors"
         />
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              if (isReact) {
+                if (files) void downloadReactProject(project.name, files);
+              } else if (currentHtml) {
+                downloadHtmlProject(project.name, currentHtml);
+              }
+            }}
+            disabled={isReact ? !files : !currentHtml}
+            title={t("builder.header.download")}
+            aria-label={t("builder.header.download")}
+            className="w-8 h-8 shrink-0 rounded-lg hover:bg-panel-2 grid place-items-center text-muted hover:text-foreground transition-colors disabled:opacity-40"
+          >
+            <svg
+              className="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 3v12" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M5 21h14" />
+            </svg>
+          </button>
           {project.publishedVersionId && project.slug && (
             <a
               href={`/p/${project.slug}`}
@@ -618,6 +718,11 @@ export function Builder({
             compileErrors={compileErrors}
             onRequestFix={requestFix}
             previewUnavailable={isReact && Boolean(viewing) && !viewingBuilt}
+            editable={editable}
+            saveState={saveState}
+            onFileEdit={handleFileEdit}
+            onHtmlEdit={handleHtmlEdit}
+            previewNonce={previewNonce}
           />
         </div>
       </div>

@@ -6,6 +6,7 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
   "builder.header.collapseChat": { en: "Collapse chat", zh: "收起聊天" },
   "builder.header.live": { en: "Live ↗", zh: "已上线 ↗" },
   "builder.header.publish": { en: "Publish", zh: "发布" },
+  "builder.header.download": { en: "Download project", zh: "下载项目" },
 
   // Builder-level errors & system chat messages
   "builder.error.generationFailed": {
@@ -107,6 +108,14 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
     en: "Failed to store the build artifact — please retry",
     zh: "构建产物保存失败，请重试",
   },
+
+  // Cloud editor
+  "builder.files.search": { en: "Search files…", zh: "搜索文件…" },
+  "builder.editor.editable": { en: "Editable — changes save automatically", zh: "可编辑 — 更改自动保存" },
+  "builder.editor.readOnly": { en: "Read-only", zh: "只读" },
+  "builder.editor.saving": { en: "Saving…", zh: "保存中…" },
+  "builder.editor.saved": { en: "Saved", zh: "已保存" },
+  "builder.editor.saveFailed": { en: "Save failed — keep editing to retry", zh: "保存失败 — 继续编辑可重试" },
 
   // Code view (file tree + read-only source)
   "builder.files.treeLabel": { en: "Project files", zh: "项目文件" },

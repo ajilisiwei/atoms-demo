@@ -4,9 +4,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { VersionMeta } from "@/lib/client/api";
 import type { BundleDiagnostic } from "@/lib/bundler/bundle";
 import { useT } from "@/lib/i18n";
-import { CodeView } from "./CodeView";
+import { CodeEditor } from "./CodeEditor";
 import { FileTree } from "./FileTree";
 import type { ProjectFiles } from "./types";
+
+export type SaveState = "idle" | "saving" | "saved" | "error";
 
 export type PanelTab = "preview" | "code" | "versions";
 
@@ -41,6 +43,13 @@ interface PreviewPanelProps {
   compileErrors: BundleDiagnostic[] | null;
   onRequestFix: () => void;
   previewUnavailable: boolean;
+  // Cloud editing (latest version only, disabled while generating/viewing)
+  editable: boolean;
+  saveState: SaveState;
+  onFileEdit: (path: string, content: string) => void;
+  onHtmlEdit: (html: string) => void;
+  // Bumped by the builder after a save lands, to reload the preview iframe.
+  previewNonce: number;
 }
 
 const TABS: { key: PanelTab; labelKey: string }[] = [
@@ -112,6 +121,39 @@ const IFRAME_CLASS: Record<DeviceWidth, string> = {
   sm: "w-[390px] max-w-full h-full border-x border-line",
 };
 
+function EditorHeader({
+  path,
+  editable,
+  saveState,
+}: {
+  path: string | null;
+  editable: boolean;
+  saveState: SaveState;
+}) {
+  const t = useT();
+  const label = !editable
+    ? t("builder.editor.readOnly")
+    : saveState === "saving"
+      ? t("builder.editor.saving")
+      : saveState === "saved"
+        ? t("builder.editor.saved")
+        : saveState === "error"
+          ? t("builder.editor.saveFailed")
+          : t("builder.editor.editable");
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-1.5">
+      <span className="min-w-0 truncate font-mono text-xs text-muted">{path ?? ""}</span>
+      <span
+        className={`shrink-0 text-[11px] ${
+          saveState === "error" && editable ? "text-red-400" : "text-muted"
+        }`}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export function PreviewPanel({
   tab,
   onTabChange,
@@ -133,10 +175,13 @@ export function PreviewPanel({
   compileErrors,
   onRequestFix,
   previewUnavailable,
+  editable,
+  saveState,
+  onFileEdit,
+  onHtmlEdit,
+  previewNonce,
 }: PreviewPanelProps) {
   const t = useT();
-  const codeRef = useRef<HTMLPreElement>(null);
-  const [copied, setCopied] = useState(false);
   const [deviceWidth, setDeviceWidth] = useState<DeviceWidth>("full");
   const [reloadNonce, setReloadNonce] = useState(0);
   const isReact = template === "react-ts";
@@ -151,19 +196,16 @@ export function PreviewPanel({
     (pickedFile && files && pickedFile in files ? pickedFile : null) ??
     (files && "src/main.tsx" in files ? "src/main.tsx" : filePaths[0] ?? null);
 
-  // Auto-scroll the code pane while the agent streams code in.
-  useEffect(() => {
-    if (streaming && codeRef.current) {
-      codeRef.current.scrollTop = codeRef.current.scrollHeight;
-    }
-  }, [streamingCode, streaming]);
-
-  async function copyCode() {
-    if (!codeText) return;
-    await navigator.clipboard.writeText(codeText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
+  // File-name filter above the tree (the in-buffer search is Cmd/Ctrl-F).
+  const [fileQuery, setFileQuery] = useState("");
+  const treeFiles = useMemo(() => {
+    if (!files) return {};
+    const q = fileQuery.trim().toLowerCase();
+    if (!q) return files;
+    return Object.fromEntries(
+      Object.entries(files).filter(([p]) => p.toLowerCase().includes(q))
+    );
+  }, [files, fileQuery]);
 
   const shownCode = streaming ? streamingCode : codeText;
 
@@ -257,14 +299,6 @@ export function PreviewPanel({
             )}
           </button>
         ))}
-        {tab === "code" && codeText && !streaming && (
-          <button
-            onClick={copyCode}
-            className="ml-auto text-xs text-muted hover:text-foreground transition-colors"
-          >
-            {copied ? t("builder.copied") : t("builder.copy")}
-          </button>
-        )}
         {tab === "preview" && previewSrc && !streaming && (
           <div className="ml-auto flex items-center gap-1">
             {DEVICE_OPTIONS.map((d) => (
@@ -397,7 +431,7 @@ export function PreviewPanel({
             <div className="flex h-full flex-col">
               <div className="flex flex-1 min-h-0 justify-center bg-background">
                 <iframe
-                  key={previewSrc + "-" + reloadNonce}
+                  key={`${previewSrc}-${reloadNonce}-${previewNonce}`}
                   src={previewSrc}
                   title={t("builder.preview.iframeTitle")}
                   className={`bg-white ${IFRAME_CLASS[deviceWidth]}`}
@@ -458,31 +492,61 @@ export function PreviewPanel({
         {tab === "code" &&
           (isReact ? (
             <div className="flex h-full min-h-0">
-              <div className="w-56 shrink-0 overflow-y-auto border-r border-line py-2">
-                <FileTree
-                  files={files ?? {}}
-                  activePath={activeFile}
-                  onSelect={setPickedFile}
-                  writingPath={writingPath}
-                  changedPaths={changedPaths ?? undefined}
-                />
+              <div className="flex w-56 shrink-0 flex-col border-r border-line">
+                <div className="border-b border-line p-2">
+                  <input
+                    value={fileQuery}
+                    onChange={(e) => setFileQuery(e.target.value)}
+                    placeholder={t("builder.files.search")}
+                    className="w-full rounded-lg border border-line bg-panel px-2.5 py-1.5 text-xs outline-none placeholder:text-muted focus:border-accent-2/50 transition-colors"
+                  />
+                </div>
+                <div className="flex-1 overflow-y-auto py-2">
+                  <FileTree
+                    files={treeFiles}
+                    activePath={activeFile}
+                    onSelect={setPickedFile}
+                    writingPath={writingPath}
+                    changedPaths={changedPaths ?? undefined}
+                  />
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <CodeView
+              <div className="flex min-w-0 flex-1 flex-col">
+                <EditorHeader
                   path={activeFile}
-                  content={(activeFile && files?.[activeFile]) || ""}
-                  streaming={streaming && writingPath === activeFile}
+                  editable={editable}
+                  saveState={saveState}
                 />
+                <div className="min-h-0 flex-1">
+                  <CodeEditor
+                    path={activeFile}
+                    value={(activeFile && files?.[activeFile]) || ""}
+                    readOnly={!editable}
+                    onChange={(v) => {
+                      if (activeFile) onFileEdit(activeFile, v);
+                    }}
+                    followTail={streaming && writingPath === activeFile}
+                  />
+                </div>
               </div>
             </div>
           ) : (
-            <pre
-              ref={codeRef}
-              className="h-full overflow-auto p-4 font-mono text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words"
-            >
-              {shownCode ?? t("builder.code.empty")}
-              {streaming && <span className="text-accent animate-blink">▌</span>}
-            </pre>
+            <div className="flex h-full min-h-0 flex-col">
+              <EditorHeader
+                path="index.html"
+                editable={editable}
+                saveState={saveState}
+              />
+              <div className="min-h-0 flex-1">
+                <CodeEditor
+                  path="index.html"
+                  value={shownCode ?? ""}
+                  readOnly={!editable}
+                  onChange={onHtmlEdit}
+                  followTail={streaming}
+                />
+              </div>
+            </div>
           ))}
 
         {tab === "versions" && (

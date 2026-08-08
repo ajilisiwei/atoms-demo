@@ -5,7 +5,9 @@ import { getSessionUserId } from "@/lib/auth";
 import { buildGenerationMessages, getLlmClient, LLM_MODEL, type HistoryEntry } from "@/lib/llm";
 import { GenerationParser, type GenEvent } from "@/lib/stream-parser";
 import { checkRateLimit } from "@/lib/ratelimit";
-import { getGenerationTheme, themePromptBlock, type GenerationTheme } from "@/lib/themes";
+import { getGenerationTheme } from "@/lib/themes";
+import { renderThemePrompt } from "@/lib/theme-prompt";
+import { parseCustomThemeName, toThemeDefinition } from "@/lib/custom-theme";
 import { getBuiltinAgent, agentPromptBlock, type BuiltinAgent } from "@/lib/agents";
 import {
   INITIAL_REACT_FILES,
@@ -64,15 +66,17 @@ function buildReactMessages(params: {
   history: HistoryEntry[];
   files: FileMap;
   prompt: string;
-  theme?: GenerationTheme | null;
+  // Rendered by the caller so built-in and user-defined themes reach the model
+  // through the same note (see resolveTheme).
+  themeBlock?: string | null;
   agent?: BuiltinAgent | null;
   focusPaths?: string[];
 }): OpenAI.ChatCompletionMessageParam[] {
-  const { history, files, prompt, theme, agent, focusPaths } = params;
+  const { history, files, prompt, themeBlock, agent, focusPaths } = params;
   const systemContent = [
     REACT_SYSTEM_PROMPT,
     agent ? agentPromptBlock(agent) : null,
-    theme ? reactThemeNote(themePromptBlock(theme)) : null,
+    themeBlock ? reactThemeNote(themeBlock) : null,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -90,6 +94,44 @@ function buildReactMessages(params: {
         : `USER REQUEST: ${prompt}`,
     },
   ];
+}
+
+type ThemeResolution =
+  | { ok: true; themeName: string | null; themeBlock: string | null }
+  | { ok: false; status: number; error: string };
+
+// Built-in themes render from their GenerationTheme exactly as before;
+// "custom:<id>" loads the caller's own theme and renders it from its tokens.
+// `explicit` marks a theme named by this request rather than inherited from the
+// project, which decides whether an unusable reference is an error.
+async function resolveTheme(
+  themeName: string | null,
+  userId: string,
+  explicit: boolean
+): Promise<ThemeResolution> {
+  const customThemeId = parseCustomThemeName(themeName);
+  if (!customThemeId) {
+    const theme = getGenerationTheme(themeName);
+    return { ok: true, themeName, themeBlock: theme ? renderThemePrompt(theme) : null };
+  }
+
+  const row = await prisma.customTheme.findFirst({
+    where: { id: customThemeId, userId },
+    select: { id: true, name: true, tokens: true },
+  });
+  const definition = row ? toThemeDefinition(row) : null;
+  if (definition) {
+    return { ok: true, themeName, themeBlock: renderThemePrompt(definition) };
+  }
+  if (explicit) {
+    return row
+      ? { ok: false, status: 400, error: "Theme tokens are invalid" }
+      : { ok: false, status: 404, error: "Theme not found" };
+  }
+  // Inherited reference that is gone or belongs to another user — a remix
+  // carries the source project's themeName. Drop it instead of blocking every
+  // future generation on this project.
+  return { ok: true, themeName: null, themeBlock: null };
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -142,8 +184,17 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
   // themeName/agentId semantics: undefined = keep project's; "" = clear; id = set.
+  // An id is either a built-in name or "custom:<id>", whose existence and
+  // ownership are checked once the session user is known to own the project.
   const requestedTheme = body.themeName;
-  if (typeof requestedTheme === "string" && requestedTheme !== "" && !getGenerationTheme(requestedTheme)) {
+  const requestedCustomTheme =
+    typeof requestedTheme === "string" ? parseCustomThemeName(requestedTheme) : null;
+  if (
+    typeof requestedTheme === "string" &&
+    requestedTheme !== "" &&
+    !requestedCustomTheme &&
+    !getGenerationTheme(requestedTheme)
+  ) {
     return NextResponse.json({ error: "Unknown theme" }, { status: 400 });
   }
   const requestedAgent = body.agentId;
@@ -173,9 +224,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     .reverse()
     .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
   const latestVersion = project.versions[0] ?? null;
-  const effectiveThemeName =
-    requestedTheme === undefined ? project.themeName : requestedTheme || null;
-  const theme = getGenerationTheme(effectiveThemeName);
+  const resolvedTheme = await resolveTheme(
+    requestedTheme === undefined ? project.themeName : requestedTheme || null,
+    userId,
+    typeof requestedTheme === "string" && requestedTheme !== ""
+  );
+  if (!resolvedTheme.ok) {
+    return NextResponse.json({ error: resolvedTheme.error }, { status: resolvedTheme.status });
+  }
+  const effectiveThemeName = resolvedTheme.themeName;
+  const themeBlock = resolvedTheme.themeBlock;
   const effectiveAgentId =
     requestedAgent === undefined ? project.agentId : requestedAgent || null;
   const agent = getBuiltinAgent(effectiveAgentId);
@@ -186,7 +244,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         history,
         files: previousFiles,
         prompt,
-        theme,
+        themeBlock,
         agent,
         focusPaths: focusPaths.filter((p) => p in previousFiles),
       })
@@ -194,7 +252,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         history,
         currentHtml: latestVersion?.html ?? null,
         prompt,
-        theme,
+        themeBlock,
         agent,
       });
 

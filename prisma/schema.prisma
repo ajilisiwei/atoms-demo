@@ -19,6 +19,7 @@ model User {
   projects     Project[]
   oauthAccounts OAuthAccount[]
   creditLedger CreditLedger[]
+  customThemes CustomTheme[]
   createdAt    DateTime       @default(now())
 }
 
@@ -45,6 +46,24 @@ model OAuthAccount {
   createdAt         DateTime @default(now())
 
   @@unique([provider, providerAccountId])
+}
+
+// A user-authored theme from Theme Studio. Referenced by Project.themeName as
+// "custom:<id>"; the built-in themes use their bare id instead.
+model CustomTheme {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  // Built-in theme id this was forked from (see src/lib/themes.ts); null when
+  // authored from scratch.
+  baseTheme String?
+  // ThemeTokens (see src/lib/theme-tokens.ts), validated before every write.
+  tokens    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt])
 }
 
 model Project {

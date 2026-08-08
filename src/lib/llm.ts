@@ -55,13 +55,17 @@ export function buildGenerationMessages(params: {
   currentHtml: string | null;
   prompt: string;
   theme?: GenerationTheme | null;
+  // Pre-rendered theme block, used for user-defined themes whose tokens are not
+  // a GenerationTheme (see renderThemePrompt in ./theme-prompt). Takes
+  // precedence over `theme` when both are given.
+  themeBlock?: string | null;
   agent?: BuiltinAgent | null;
 }): OpenAI.ChatCompletionMessageParam[] {
-  const { history, currentHtml, prompt, theme, agent } = params;
+  const { history, currentHtml, prompt, theme, themeBlock, agent } = params;
   const systemContent = [
     BUILDER_SYSTEM_PROMPT,
     agent ? agentPromptBlock(agent) : null,
-    theme ? themePromptBlock(theme) : null,
+    themeBlock ?? (theme ? themePromptBlock(theme) : null),
   ]
     .filter(Boolean)
     .join("\n\n");

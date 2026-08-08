@@ -10,7 +10,12 @@ import { useT } from "@/lib/i18n";
 import { LogoMark } from "@/components/Logo";
 import { assembleDocument } from "@/lib/bundler/assemble";
 import { bundleFiles, ensureEsbuild, type BundleDiagnostic } from "@/lib/bundler/bundle";
-import { downloadHtmlProject, downloadReactProject } from "@/lib/download";
+import {
+  downloadDirectoryZip,
+  downloadHtmlProject,
+  downloadReactProject,
+  downloadSingleFile,
+} from "@/lib/download";
 import { ChatPanel, type RestoredInput } from "./ChatPanel";
 import type { ConsoleEntry, ConsoleLevel } from "./ConsolePanel";
 import { PreviewPanel, type PanelTab, type SaveState } from "./PreviewPanel";
@@ -77,6 +82,18 @@ export function Builder({
   const [previewNonce, setPreviewNonce] = useState(0);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<{ files?: ProjectFiles; html?: string } | null>(null);
+
+  // Chat attachments ("select file" from the tree menu); mirrored into a ref
+  // so `send` (a useCallback) reads the latest without depending on it.
+  const [attachedPaths, setAttachedPaths] = useState<string[]>([]);
+  const attachedRef = useRef<string[]>([]);
+  useEffect(() => {
+    attachedRef.current = attachedPaths;
+  }, [attachedPaths]);
+
+  function attachPath(path: string) {
+    setAttachedPaths((prev) => (prev.includes(path) ? prev : [...prev, path]));
+  }
 
   // Console: runtime logs bridged from the preview + build events.
   const [consoleLogs, setConsoleLogs] = useState<ConsoleEntry[]>([]);
@@ -329,8 +346,14 @@ export function Builder({
                 break;
             }
           },
-          { signal: abort.signal, themeName: effectiveTheme, agentId: effectiveAgent }
+          {
+            signal: abort.signal,
+            themeName: effectiveTheme,
+            agentId: effectiveAgent,
+            focusPaths: attachedRef.current.length ? attachedRef.current : undefined,
+          }
         );
+        if (mountedRef.current) setAttachedPaths([]);
       } catch (err) {
         failure = abort.signal.aborted
           ? null // component unmounted / navigation — stay silent
@@ -573,6 +596,75 @@ export function Builder({
     scheduleSave({ html });
   }
 
+  // ---- File-tree structure operations (react-ts, latest version only) ----
+
+  function applyFiles(next: ProjectFiles) {
+    setFiles(next);
+    scheduleSave({ files: next });
+  }
+
+  // Renames a file, or every file under a directory. Returns false when the
+  // target already exists.
+  function renamePath(oldPath: string, newPath: string, isDir: boolean): boolean {
+    if (!editable || !files || oldPath === newPath) return false;
+    const next: ProjectFiles = {};
+    if (isDir) {
+      const oldPrefix = `${oldPath}/`;
+      const newPrefix = `${newPath}/`;
+      for (const [p, c] of Object.entries(files)) {
+        const moved = p.startsWith(oldPrefix) ? newPrefix + p.slice(oldPrefix.length) : p;
+        if (moved !== p && files[moved] !== undefined) return false;
+        next[moved] = c;
+      }
+    } else {
+      if (files[newPath] !== undefined) return false;
+      for (const [p, c] of Object.entries(files)) next[p === oldPath ? newPath : p] = c;
+    }
+    applyFiles(next);
+    setAttachedPaths((prev) =>
+      prev.map((p) =>
+        isDir && p.startsWith(`${oldPath}/`)
+          ? newPath + p.slice(oldPath.length)
+          : p === oldPath
+            ? newPath
+            : p
+      )
+    );
+    return true;
+  }
+
+  function deletePath(path: string, isDir: boolean) {
+    if (!editable || !files) return;
+    const prefix = `${path}/`;
+    const next = Object.fromEntries(
+      Object.entries(files).filter(([p]) => (isDir ? !p.startsWith(prefix) : p !== path))
+    );
+    applyFiles(next);
+    setAttachedPaths((prev) =>
+      prev.filter((p) => (isDir ? !p.startsWith(prefix) : p !== path))
+    );
+  }
+
+  // Returns false when the path is taken; otherwise creates an empty file.
+  function createFile(path: string): boolean {
+    if (!editable || !files || files[path] !== undefined) return false;
+    applyFiles({ ...files, [path]: "" });
+    return true;
+  }
+
+  function addUploadedFiles(entries: { path: string; content: string }[]) {
+    if (!editable || !files || entries.length === 0) return;
+    const next = { ...files };
+    for (const { path, content } of entries) next[path] = content;
+    applyFiles(next);
+  }
+
+  function downloadPath(path: string, isDir: boolean) {
+    if (!files) return;
+    if (isDir) void downloadDirectoryZip(path, files);
+    else if (files[path] !== undefined) downloadSingleFile(path, files[path]);
+  }
+
   function requestFix() {
     if (!compileErrors?.length) return;
     const diag = compileErrors
@@ -755,6 +847,10 @@ export function Builder({
             }
             agentValue={agentId}
             onAgentChange={setAgentId}
+            attachedPaths={attachedPaths}
+            onDetachPath={(p) =>
+              setAttachedPaths((prev) => prev.filter((x) => x !== p))
+            }
           />
         </div>
         {!chatCollapsed && (
@@ -796,6 +892,14 @@ export function Builder({
             consoleUnseenError={consoleUnseenError}
             onToggleConsole={toggleConsole}
             onClearConsole={() => setConsoleLogs([])}
+            fileOps={{
+              attach: attachPath,
+              rename: renamePath,
+              remove: deletePath,
+              create: createFile,
+              upload: addUploadedFiles,
+              download: downloadPath,
+            }}
           />
         </div>
       </div>

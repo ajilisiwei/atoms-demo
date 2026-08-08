@@ -115,6 +115,31 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
   "builder.files.expandPanel": { en: "Expand file panel", zh: "展开文件栏" },
   "builder.tabs.closeFile": { en: "Close file", zh: "关闭文件" },
 
+  // File-tree row menus + dialogs
+  "builder.files.menu.more": { en: "More actions", zh: "更多操作" },
+  "builder.files.menu.pick": { en: "Select file", zh: "选择文件" },
+  "builder.files.menu.download": { en: "Download", zh: "下载" },
+  "builder.files.menu.rename": { en: "Rename", zh: "重命名" },
+  "builder.files.menu.delete": { en: "Delete", zh: "删除" },
+  "builder.files.menu.newFile": { en: "New file", zh: "新建文件" },
+  "builder.files.menu.newFolder": { en: "New folder", zh: "新建文件夹" },
+  "builder.files.menu.uploadFile": { en: "Upload file", zh: "上传文件" },
+  "builder.files.menu.uploadFolder": { en: "Upload folder", zh: "上传文件夹" },
+  "builder.files.dialog.renameTitle": { en: "Rename {name}", zh: "重命名 {name}" },
+  "builder.files.dialog.newFileTitle": { en: "New file", zh: "新建文件" },
+  "builder.files.dialog.newFolderTitle": { en: "New folder", zh: "新建文件夹" },
+  "builder.files.dialog.confirm": { en: "OK", zh: "确定" },
+  "builder.files.dialog.deleteTitle": { en: "Delete {name}?", zh: "删除 {name}？" },
+  "builder.files.dialog.deleteFileBody": {
+    en: "This file will be removed from the project. This cannot be undone.",
+    zh: "该文件将从项目中移除，此操作无法撤销。",
+  },
+  "builder.files.dialog.deleteDirBody": {
+    en: "The folder and every file inside it will be removed. This cannot be undone.",
+    zh: "该文件夹及其中所有文件都将被移除，此操作无法撤销。",
+  },
+  "builder.chat.detachFile": { en: "Remove attachment", zh: "移除引用" },
+
   // Console panel
   "builder.console.title": { en: "Console", zh: "控制台" },
   "builder.console.toggle": { en: "Toggle console", zh: "打开/关闭控制台" },

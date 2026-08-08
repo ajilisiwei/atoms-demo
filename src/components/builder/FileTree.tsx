@@ -1,7 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useT } from "@/lib/i18n";
+
+// Row "more" menu callbacks; dialogs/file-inputs live in the parent.
+export interface TreeActions {
+  onPick: (path: string, isDir: boolean) => void;
+  onDownload: (path: string, isDir: boolean) => void;
+  onRenameRequest: (path: string, isDir: boolean) => void;
+  onDeleteRequest: (path: string, isDir: boolean) => void;
+  onNewFileRequest: (dir: string) => void;
+  onNewFolderRequest: (dir: string) => void;
+  onUploadFile: (dir: string) => void;
+  onUploadFolder: (dir: string) => void;
+}
 
 interface FileTreeProps {
   // Flat map of project-relative path → file contents.
@@ -12,6 +24,10 @@ interface FileTreeProps {
   writingPath?: string | null;
   // Paths touched by the latest generation, flagged with an "M" badge.
   changedPaths?: Set<string>;
+  // Row menus appear only when actions are provided (i.e. when editable).
+  actions?: TreeActions;
+  // Directories that exist without files yet (freshly created folders).
+  extraDirs?: string[];
 }
 
 type TreeNode =
@@ -20,10 +36,20 @@ type TreeNode =
 
 // Groups flat "src/components/Button.tsx" paths into a nested tree,
 // directories before files and both alphabetical within each level.
-function buildNodes(paths: string[], parentPath: string): TreeNode[] {
+// `extraDirs` are level-relative directory paths kept alive with no files.
+function buildNodes(paths: string[], extraDirs: string[], parentPath: string): TreeNode[] {
   const dirNames: string[] = [];
   const dirChildren = new Map<string, string[]>();
+  const dirExtras = new Map<string, string[]>();
   const fileNames: string[] = [];
+
+  const ensureDir = (head: string) => {
+    if (!dirChildren.has(head)) {
+      dirNames.push(head);
+      dirChildren.set(head, []);
+      dirExtras.set(head, []);
+    }
+  };
 
   for (const path of paths) {
     const slash = path.indexOf("/");
@@ -32,14 +58,15 @@ function buildNodes(paths: string[], parentPath: string): TreeNode[] {
       continue;
     }
     const head = path.slice(0, slash);
-    const rest = path.slice(slash + 1);
-    const bucket = dirChildren.get(head);
-    if (bucket) {
-      bucket.push(rest);
-    } else {
-      dirNames.push(head);
-      dirChildren.set(head, [rest]);
-    }
+    ensureDir(head);
+    dirChildren.get(head)!.push(path.slice(slash + 1));
+  }
+
+  for (const dir of extraDirs) {
+    const slash = dir.indexOf("/");
+    const head = slash === -1 ? dir : dir.slice(0, slash);
+    ensureDir(head);
+    if (slash !== -1) dirExtras.get(head)!.push(dir.slice(slash + 1));
   }
 
   const join = (name: string) => (parentPath ? `${parentPath}/${name}` : name);
@@ -52,7 +79,7 @@ function buildNodes(paths: string[], parentPath: string): TreeNode[] {
         kind: "dir",
         name,
         path,
-        children: buildNodes(dirChildren.get(name) ?? [], path),
+        children: buildNodes(dirChildren.get(name) ?? [], dirExtras.get(name) ?? [], path),
       };
     });
 
@@ -121,7 +148,110 @@ function FolderIcon() {
 }
 
 const ROW_BASE =
-  "group flex h-7 w-full items-center gap-1.5 rounded-md pr-2 text-left text-[13px] transition-colors";
+  "group flex h-7 w-full items-center gap-1.5 rounded-md pr-1 text-left text-[13px] transition-colors";
+
+interface MenuState {
+  path: string;
+  isDir: boolean;
+  x: number;
+  y: number;
+}
+
+function MoreButton({
+  onOpen,
+  label,
+}: {
+  onOpen: (e: React.MouseEvent<HTMLSpanElement>) => void;
+  label: string;
+}) {
+  return (
+    <span
+      role="button"
+      tabIndex={-1}
+      title={label}
+      aria-label={label}
+      onClick={onOpen}
+      className="grid h-5 w-5 shrink-0 place-items-center rounded text-transparent hover:bg-panel-2 hover:text-foreground group-hover:text-muted"
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <circle cx="12" cy="5" r="1.7" />
+        <circle cx="12" cy="12" r="1.7" />
+        <circle cx="12" cy="19" r="1.7" />
+      </svg>
+    </span>
+  );
+}
+
+const MENU_WIDTH = 184;
+
+function TreeMenu({
+  menu,
+  actions,
+  onClose,
+}: {
+  menu: MenuState;
+  actions: TreeActions;
+  onClose: () => void;
+}) {
+  const t = useT();
+
+  useEffect(() => {
+    // "click" (not mousedown) so a menu item's own click fires first.
+    const close = () => onClose();
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [onClose]);
+
+  const run = (fn: () => void) => () => {
+    onClose();
+    fn();
+  };
+
+  const item = (label: string, onClick: () => void, danger = false) => (
+    <button
+      key={label}
+      type="button"
+      onClick={run(onClick)}
+      className={`flex w-full items-center rounded-lg px-3 py-1.5 text-left text-[13px] transition-colors ${
+        danger ? "text-red-400 hover:bg-red-500/10" : "hover:bg-panel-2"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  const divider = <div key="div" className="my-1 border-t border-line" />;
+
+  const items = menu.isDir
+    ? [
+        item(t("builder.files.menu.newFile"), () => actions.onNewFileRequest(menu.path)),
+        item(t("builder.files.menu.newFolder"), () => actions.onNewFolderRequest(menu.path)),
+        item(t("builder.files.menu.uploadFile"), () => actions.onUploadFile(menu.path)),
+        item(t("builder.files.menu.uploadFolder"), () => actions.onUploadFolder(menu.path)),
+        divider,
+        item(t("builder.files.menu.pick"), () => actions.onPick(menu.path, true)),
+        item(t("builder.files.menu.download"), () => actions.onDownload(menu.path, true)),
+        item(t("builder.files.menu.rename"), () => actions.onRenameRequest(menu.path, true)),
+        item(t("builder.files.menu.delete"), () => actions.onDeleteRequest(menu.path, true), true),
+      ]
+    : [
+        item(t("builder.files.menu.pick"), () => actions.onPick(menu.path, false)),
+        divider,
+        item(t("builder.files.menu.download"), () => actions.onDownload(menu.path, false)),
+        item(t("builder.files.menu.rename"), () => actions.onRenameRequest(menu.path, false)),
+        item(t("builder.files.menu.delete"), () => actions.onDeleteRequest(menu.path, false), true),
+      ];
+
+  return (
+    <div
+      style={{ left: menu.x, top: menu.y, width: MENU_WIDTH }}
+      className="fixed z-50 rounded-xl border border-line bg-panel p-1 shadow-xl"
+      role="menu"
+    >
+      {items}
+    </div>
+  );
+}
 
 // 12px per level, offset so the root level clears the panel edge.
 function indent(depth: number): number {
@@ -135,6 +265,8 @@ interface RowContext {
   isOpen: (path: string) => boolean;
   onToggleDir: (path: string) => void;
   onSelect: (path: string) => void;
+  moreLabel: string;
+  openMenu?: (path: string, isDir: boolean, e: React.MouseEvent<HTMLSpanElement>) => void;
 }
 
 function TreeRows({
@@ -174,20 +306,29 @@ function DirRow({
 
   return (
     <>
-      <button
-        type="button"
+      <div
         role="treeitem"
         aria-expanded={open}
         aria-selected={false}
+        tabIndex={0}
         title={label}
         onClick={() => ctx.onToggleDir(node.path)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") ctx.onToggleDir(node.path);
+        }}
         style={{ paddingLeft: indent(depth) }}
-        className={`${ROW_BASE} text-muted hover:bg-panel-2/60 hover:text-foreground`}
+        className={`${ROW_BASE} cursor-pointer select-none text-muted hover:bg-panel-2/60 hover:text-foreground`}
       >
         <ChevronIcon open={open} />
         <FolderIcon />
-        <span className="truncate">{node.name}</span>
-      </button>
+        <span className="min-w-0 flex-1 truncate">{node.name}</span>
+        {ctx.openMenu && (
+          <MoreButton
+            label={ctx.moreLabel}
+            onOpen={(e) => ctx.openMenu!(node.path, true, e)}
+          />
+        )}
+      </div>
       {open && (
         <div role="group">
           <TreeRows nodes={node.children} depth={depth + 1} ctx={ctx} />
@@ -218,15 +359,18 @@ function FileRow({
       : "text-muted hover:bg-panel-2/60 hover:text-foreground";
 
   return (
-    <button
-      type="button"
+    <div
       role="treeitem"
       aria-selected={active}
+      tabIndex={0}
       title={node.path}
       onClick={() => ctx.onSelect(node.path)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") ctx.onSelect(node.path);
+      }}
       // Aligns the dot with the folder icon of the enclosing directory row.
       style={{ paddingLeft: indent(depth) + 13 }}
-      className={`${ROW_BASE} ${tone}`}
+      className={`${ROW_BASE} cursor-pointer select-none ${tone}`}
     >
       <span
         aria-hidden="true"
@@ -248,7 +392,13 @@ function FileRow({
           className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent"
         />
       )}
-    </button>
+      {ctx.openMenu && (
+        <MoreButton
+          label={ctx.moreLabel}
+          onOpen={(e) => ctx.openMenu!(node.path, false, e)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -258,14 +408,20 @@ export function FileTree({
   onSelect,
   writingPath = null,
   changedPaths,
+  actions,
+  extraDirs,
 }: FileTreeProps) {
   const t = useT();
   // User-collapsed directories: tracking the closed set keeps every new
   // directory expanded by default without touching state on each render.
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [menu, setMenu] = useState<MenuState | null>(null);
 
   const paths = useMemo(() => Object.keys(files), [files]);
-  const tree = useMemo(() => buildNodes(paths, ""), [paths]);
+  const tree = useMemo(
+    () => buildNodes(paths, extraDirs ?? [], ""),
+    [paths, extraDirs]
+  );
 
   // Derived, never stored: only the streaming file's directories are forced
   // open (so generation stays visible). The active file's ancestors are NOT
@@ -282,6 +438,17 @@ export function FileTree({
     });
   }
 
+  function openMenu(path: string, isDir: boolean, e: React.MouseEvent<HTMLSpanElement>) {
+    e.stopPropagation();
+    // Keep this same click from reaching the document-level close listener.
+    e.nativeEvent.stopImmediatePropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    let x = rect.right + 6;
+    if (x + MENU_WIDTH > window.innerWidth - 8) x = rect.left - MENU_WIDTH - 6;
+    const y = Math.min(rect.top, window.innerHeight - 340);
+    setMenu({ path, isDir, x, y });
+  }
+
   const ctx: RowContext = {
     activePath,
     writingPath,
@@ -289,9 +456,11 @@ export function FileTree({
     isOpen: (path) => forcedOpen.has(path) || !collapsed.has(path),
     onToggleDir: toggleDir,
     onSelect,
+    moreLabel: t("builder.files.menu.more"),
+    openMenu: actions ? openMenu : undefined,
   };
 
-  if (paths.length === 0) {
+  if (paths.length === 0 && !extraDirs?.length) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted">
         {t("builder.files.empty")}
@@ -306,6 +475,9 @@ export function FileTree({
       className="h-full overflow-y-auto py-1.5 pr-1"
     >
       <TreeRows nodes={tree} depth={0} ctx={ctx} />
+      {menu && actions && (
+        <TreeMenu menu={menu} actions={actions} onClose={() => setMenu(null)} />
+      )}
     </div>
   );
 }

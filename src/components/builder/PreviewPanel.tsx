@@ -4,11 +4,25 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { VersionMeta } from "@/lib/client/api";
 import type { BundleDiagnostic } from "@/lib/bundler/bundle";
 import { useT } from "@/lib/i18n";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { InputDialog } from "@/components/InputDialog";
 import { CodeEditor } from "./CodeEditor";
 import { ConsolePanel, type ConsoleEntry } from "./ConsolePanel";
-import { FileTree, fileDotClass } from "./FileTree";
+import { FileTree, fileDotClass, type TreeActions } from "./FileTree";
 import { ResizeHandle, useResizableWidth } from "./useResizable";
 import type { ProjectFiles } from "./types";
+
+// Structure operations owned by the builder (files state + save pipeline).
+export interface FileOps {
+  attach: (path: string) => void;
+  rename: (oldPath: string, newPath: string, isDir: boolean) => boolean;
+  remove: (path: string, isDir: boolean) => void;
+  create: (path: string) => boolean;
+  upload: (entries: { path: string; content: string }[]) => void;
+  download: (path: string, isDir: boolean) => void;
+}
+
+const TEXT_FILE_RE = /\.(tsx?|jsx?|mjs|cjs|css|json|md|txt|html?|svg)$/i;
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -58,6 +72,7 @@ interface PreviewPanelProps {
   consoleUnseenError: boolean;
   onToggleConsole: () => void;
   onClearConsole: () => void;
+  fileOps: FileOps;
 }
 
 const TABS: { key: PanelTab; labelKey: string }[] = [
@@ -323,6 +338,7 @@ export function PreviewPanel({
   consoleUnseenError,
   onToggleConsole,
   onClearConsole,
+  fileOps,
 }: PreviewPanelProps) {
   const t = useT();
   const [deviceWidth, setDeviceWidth] = useState<DeviceWidth>("full");
@@ -380,6 +396,108 @@ export function PreviewPanel({
       setActivePath(next[Math.min(idx, next.length - 1)] ?? null);
     }
   }
+
+  // ---- Tree row menu: dialogs, uploads, tab sync -------------------------
+  const [treeDialog, setTreeDialog] = useState<{
+    mode: "rename" | "newFile" | "newFolder";
+    target: string;
+    isDir: boolean;
+  } | null>(null);
+  const [treeDelete, setTreeDelete] = useState<{ path: string; isDir: boolean } | null>(null);
+  // Freshly created folders with no files yet (ephemeral, this session only).
+  const [extraDirs, setExtraDirs] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const uploadDirRef = useRef<string>("");
+
+  const dirOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
+  const baseOf = (p: string) => p.split("/").pop() ?? p;
+
+  function handleDialogConfirm(value: string) {
+    if (!treeDialog) return;
+    const name = value.trim();
+    // One level only — no separators, no traversal.
+    if (!name || name.includes("/") || name.includes("\\") || name === "..") return;
+    const { mode, target, isDir } = treeDialog;
+    if (mode === "rename") {
+      const parent = dirOf(target);
+      const newPath = parent ? `${parent}/${name}` : name;
+      if (newPath !== target && fileOps.rename(target, newPath, isDir)) {
+        if (isDir) {
+          const prefix = `${target}/`;
+          const mapPath = (p: string) =>
+            p.startsWith(prefix) ? `${newPath}/${p.slice(prefix.length)}` : p;
+          setOpenTabs((tabs) => tabs.map(mapPath));
+          setActivePath((p) => (p ? mapPath(p) : p));
+          setExtraDirs((dirs) => dirs.map((d) => (d === target ? newPath : mapPath(d))));
+        } else {
+          setOpenTabs((tabs) => tabs.map((p) => (p === target ? newPath : p)));
+          setActivePath((p) => (p === target ? newPath : p));
+        }
+      }
+    } else if (mode === "newFile") {
+      const path = `${target}/${name}`;
+      if (fileOps.create(path)) openFile(path);
+    } else {
+      setExtraDirs((dirs) => {
+        const path = `${target}/${name}`;
+        return dirs.includes(path) ? dirs : [...dirs, path];
+      });
+    }
+    setTreeDialog(null);
+  }
+
+  function handleDeleteConfirm() {
+    if (!treeDelete) return;
+    const { path, isDir } = treeDelete;
+    fileOps.remove(path, isDir);
+    if (isDir) {
+      const prefix = `${path}/`;
+      setOpenTabs((tabs) => tabs.filter((p) => !p.startsWith(prefix)));
+      setActivePath((p) => (p && p.startsWith(prefix) ? null : p));
+      setExtraDirs((dirs) => dirs.filter((d) => d !== path && !d.startsWith(prefix)));
+    } else {
+      setOpenTabs((tabs) => tabs.filter((p) => p !== path));
+      setActivePath((p) => (p === path ? null : p));
+    }
+    setTreeDelete(null);
+  }
+
+  async function handleUploadChange(
+    e: React.ChangeEvent<HTMLInputElement>,
+    isFolder: boolean
+  ) {
+    const dir = uploadDirRef.current;
+    const picked = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = "";
+    if (!dir || picked.length === 0) return;
+    const entries: { path: string; content: string }[] = [];
+    for (const f of picked) {
+      const rel = isFolder
+        ? (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name
+        : f.name;
+      if (!TEXT_FILE_RE.test(rel)) continue; // text sources only
+      entries.push({ path: `${dir}/${rel}`, content: await f.text() });
+    }
+    if (entries.length) fileOps.upload(entries);
+  }
+
+  const treeActions: TreeActions = {
+    onPick: (path) => fileOps.attach(path),
+    onDownload: (path, isDir) => fileOps.download(path, isDir),
+    onRenameRequest: (path, isDir) => setTreeDialog({ mode: "rename", target: path, isDir }),
+    onDeleteRequest: (path, isDir) => setTreeDelete({ path, isDir }),
+    onNewFileRequest: (dir) => setTreeDialog({ mode: "newFile", target: dir, isDir: true }),
+    onNewFolderRequest: (dir) => setTreeDialog({ mode: "newFolder", target: dir, isDir: true }),
+    onUploadFile: (dir) => {
+      uploadDirRef.current = dir;
+      fileInputRef.current?.click();
+    },
+    onUploadFolder: (dir) => {
+      uploadDirRef.current = dir;
+      folderInputRef.current?.click();
+    },
+  };
 
   // File-name filter above the tree (the in-buffer search is Cmd/Ctrl-F).
   const [fileQuery, setFileQuery] = useState("");
@@ -735,6 +853,8 @@ export function PreviewPanel({
                           onSelect={openFile}
                           writingPath={writingPath}
                           changedPaths={changedPaths ?? undefined}
+                          actions={editable ? treeActions : undefined}
+                          extraDirs={extraDirs}
                         />
                       </div>
                     </div>
@@ -860,6 +980,53 @@ export function PreviewPanel({
           </div>
         )}
       </div>
+
+      {/* Tree-menu dialogs + hidden upload inputs */}
+      <InputDialog
+        open={treeDialog !== null}
+        title={
+          treeDialog?.mode === "rename"
+            ? t("builder.files.dialog.renameTitle", { name: baseOf(treeDialog.target) })
+            : treeDialog?.mode === "newFile"
+              ? t("builder.files.dialog.newFileTitle")
+              : t("builder.files.dialog.newFolderTitle")
+        }
+        initialValue={treeDialog?.mode === "rename" ? baseOf(treeDialog.target) : ""}
+        confirmLabel={t("builder.files.dialog.confirm")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={handleDialogConfirm}
+        onCancel={() => setTreeDialog(null)}
+      />
+      <ConfirmDialog
+        open={treeDelete !== null}
+        title={t("builder.files.dialog.deleteTitle", {
+          name: treeDelete ? baseOf(treeDelete.path) : "",
+        })}
+        body={
+          treeDelete?.isDir
+            ? t("builder.files.dialog.deleteDirBody")
+            : t("builder.files.dialog.deleteFileBody")
+        }
+        confirmLabel={t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        danger
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setTreeDelete(null)}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => void handleUploadChange(e, false)}
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        className="hidden"
+        {...{ webkitdirectory: "" }}
+        onChange={(e) => void handleUploadChange(e, true)}
+      />
     </div>
   );
 }

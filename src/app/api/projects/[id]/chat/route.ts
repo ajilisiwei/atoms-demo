@@ -66,8 +66,9 @@ function buildReactMessages(params: {
   prompt: string;
   theme?: GenerationTheme | null;
   agent?: BuiltinAgent | null;
+  focusPaths?: string[];
 }): OpenAI.ChatCompletionMessageParam[] {
-  const { history, files, prompt, theme, agent } = params;
+  const { history, files, prompt, theme, agent, focusPaths } = params;
   const systemContent = [
     REACT_SYSTEM_PROMPT,
     agent ? agentPromptBlock(agent) : null,
@@ -76,12 +77,17 @@ function buildReactMessages(params: {
     .filter(Boolean)
     .join("\n\n");
   const context = formatFilesContext(files);
+  const focusNote = focusPaths?.length
+    ? `\n\nThe user attached these files as the focus of the request — concentrate the changes there:\n${focusPaths.map((p) => `- ${p}`).join("\n")}`
+    : "";
   return [
     { role: "system", content: systemContent },
     ...history.map((h) => ({ role: h.role, content: h.content })),
     {
       role: "user",
-      content: context ? `${context}\n\nUSER REQUEST: ${prompt}` : `USER REQUEST: ${prompt}`,
+      content: context
+        ? `${context}${focusNote}\n\nUSER REQUEST: ${prompt}`
+        : `USER REQUEST: ${prompt}`,
     },
   ];
 }
@@ -114,12 +120,20 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
-  let body: { prompt?: string; themeName?: string | null; agentId?: string | null };
+  let body: {
+    prompt?: string;
+    themeName?: string | null;
+    agentId?: string | null;
+    focusPaths?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+  const focusPaths = Array.isArray(body.focusPaths)
+    ? body.focusPaths.filter((p): p is string => typeof p === "string").slice(0, 20)
+    : [];
   const prompt = body.prompt?.trim() ?? "";
   if (!prompt || prompt.length > MAX_PROMPT_LENGTH) {
     return NextResponse.json(
@@ -168,7 +182,14 @@ export async function POST(req: NextRequest, { params }: Params) {
   const isReact = project.template === REACT_TEMPLATE;
   const previousFiles = isReact ? currentSnapshot(latestVersion?.files) : {};
   const messages = isReact
-    ? buildReactMessages({ history, files: previousFiles, prompt, theme, agent })
+    ? buildReactMessages({
+        history,
+        files: previousFiles,
+        prompt,
+        theme,
+        agent,
+        focusPaths: focusPaths.filter((p) => p in previousFiles),
+      })
     : buildGenerationMessages({
         history,
         currentHtml: latestVersion?.html ?? null,

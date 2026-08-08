@@ -31,6 +31,29 @@ export function downloadHtmlProject(name: string, html: string): void {
   );
 }
 
+// Single file from the editor's file menu.
+export function downloadSingleFile(path: string, content: string): void {
+  triggerDownload(
+    new Blob([content], { type: "text/plain;charset=utf-8" }),
+    path.split("/").pop() ?? "file.txt"
+  );
+}
+
+// A directory subtree zipped, paths relative to the directory itself.
+export async function downloadDirectoryZip(
+  dir: string,
+  files: ProjectFiles
+): Promise<void> {
+  const { default: JSZip } = await import("jszip");
+  const zip = new JSZip();
+  const prefix = `${dir}/`;
+  for (const [path, content] of Object.entries(files)) {
+    if (path.startsWith(prefix)) zip.file(path.slice(prefix.length), content);
+  }
+  const blob = await zip.generateAsync({ type: "blob" });
+  triggerDownload(blob, `${dir.split("/").pop() ?? "folder"}.zip`);
+}
+
 const PACKAGE_JSON = (name: string) =>
   JSON.stringify(
     {

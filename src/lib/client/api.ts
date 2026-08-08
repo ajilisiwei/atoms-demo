@@ -56,6 +56,8 @@ export interface StreamGenerationOptions {
   // undefined = keep the project's stored value; null = clear; id = set
   themeName?: string | null;
   agentId?: string | null;
+  // react-ts: file paths the user attached so the edit focuses on them
+  focusPaths?: string[];
 }
 
 export async function streamGeneration(
@@ -67,6 +69,7 @@ export async function streamGeneration(
   const payload: Record<string, unknown> = { prompt };
   if (opts.themeName !== undefined) payload.themeName = opts.themeName ?? "";
   if (opts.agentId !== undefined) payload.agentId = opts.agentId ?? "";
+  if (opts.focusPaths?.length) payload.focusPaths = opts.focusPaths;
   const res = await fetch(`/api/projects/${projectId}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

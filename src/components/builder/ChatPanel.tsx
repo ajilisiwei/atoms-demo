@@ -34,6 +34,9 @@ interface ChatPanelProps {
   // @-mention agent selection (optional; enabled when onAgentChange is given).
   agentValue?: string | null;
   onAgentChange?: (id: string | null) => void;
+  // Files attached from the tree menu; chips render above the input.
+  attachedPaths?: string[];
+  onDetachPath?: (path: string) => void;
 }
 
 function PlanTimeline({ steps, live }: { steps: string[]; live: boolean }) {
@@ -71,6 +74,8 @@ export function ChatPanel({
   agent,
   agentValue,
   onAgentChange,
+  attachedPaths,
+  onDetachPath,
 }: ChatPanelProps) {
   const t = useT();
   const [input, setInput] = useState("");
@@ -221,6 +226,41 @@ export function ChatPanel({
           }}
           className="relative rounded-xl bg-panel border border-line p-2 focus-within:border-accent-2/50 transition-colors"
         >
+          {attachedPaths && attachedPaths.length > 0 && (
+            <div className="mb-1.5 flex flex-wrap gap-1.5 px-1 pt-1">
+              {attachedPaths.map((p) => (
+                <span
+                  key={p}
+                  title={p}
+                  className="flex items-center gap-1 rounded-lg bg-accent-2/10 px-2 py-1 text-xs text-accent-2"
+                >
+                  <span className="font-medium">#</span>
+                  <span className="max-w-[160px] truncate">{p.split("/").pop()}</span>
+                  {onDetachPath && (
+                    <button
+                      type="button"
+                      onClick={() => onDetachPath(p)}
+                      aria-label={t("builder.chat.detachFile")}
+                      className="ml-0.5 grid h-3.5 w-3.5 place-items-center rounded hover:bg-accent-2/20"
+                    >
+                      <svg
+                        width="8"
+                        height="8"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M6 6l12 12M18 6 6 18" />
+                      </svg>
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
           {mention.menuOpen && (
             <AgentMentionMenu
               candidates={mention.candidates}

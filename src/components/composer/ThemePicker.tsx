@@ -4,7 +4,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client/api";
 import { useT } from "@/lib/i18n";
 import { GENERATION_THEMES, getGenerationTheme } from "@/lib/themes";
+import { BUILTIN_THEME_TOKENS, type ThemeTokens } from "@/lib/theme-tokens";
+import {
+  ThemeHoverPreview,
+  type HoverAnchor,
+} from "@/components/theme/ThemeHoverPreview";
 import { ThemeStudio, type CustomThemeRow } from "@/components/theme/ThemeStudio";
+
+interface HoverState {
+  tokens: ThemeTokens;
+  name: string;
+  dots: readonly string[];
+  anchor: HoverAnchor;
+}
+
+const canHover = () =>
+  typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches;
 
 interface ThemePickerProps {
   value: string | null;
@@ -39,8 +54,42 @@ export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
   const [query, setQuery] = useState("");
   const [customs, setCustoms] = useState<CustomThemeRow[]>([]);
   const [studioOpen, setStudioOpen] = useState(false);
+  const [hover, setHover] = useState<HoverState | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
+
+  // Hover preview: delayed show so scrolling past rows doesn't flicker.
+  function rowHoverProps(entry: {
+    tokens: ThemeTokens;
+    name: string;
+    dots: readonly string[];
+  }) {
+    if (!canHover()) return {};
+    const show = (e: React.SyntheticEvent<HTMLButtonElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = setTimeout(() => {
+        setHover({
+          ...entry,
+          anchor: { left: rect.left, right: rect.right, top: rect.top },
+        });
+      }, 150);
+    };
+    const hide = () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+      setHover(null);
+    };
+    return { onMouseEnter: show, onFocus: show, onMouseLeave: hide, onBlur: hide };
+  }
+
+  useEffect(
+    () => () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    },
+    []
+  );
 
   const selectedBuiltin = getGenerationTheme(value);
   const selectedCustom = value?.startsWith("custom:")
@@ -115,6 +164,7 @@ export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
     onChange(id);
     setOpen(false);
     setQuery("");
+    setHover(null);
   }
 
   const selectedLabel = selectedCustom
@@ -178,6 +228,11 @@ export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
                     key={row.id}
                     type="button"
                     onClick={() => choose(`custom:${row.id}`)}
+                    {...rowHoverProps({
+                      tokens: row.tokens,
+                      name: row.name,
+                      dots: customDots(row),
+                    })}
                     className="w-full text-left flex items-center justify-between px-4 py-2 text-sm hover:bg-panel-2 cursor-pointer"
                   >
                     <span className="flex min-w-0 items-center gap-1.5">
@@ -197,6 +252,13 @@ export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
                 key={theme.id}
                 type="button"
                 onClick={() => choose(theme.id)}
+                {...rowHoverProps({
+                  tokens:
+                    BUILTIN_THEME_TOKENS.find((b) => b.id === theme.id)?.tokens ??
+                    theme.tokens,
+                  name: theme.name,
+                  dots: theme.preview,
+                })}
                 className="w-full text-left flex items-center justify-between px-4 py-2 text-sm hover:bg-panel-2 cursor-pointer"
               >
                 <span className="flex min-w-0 items-center gap-1.5">
@@ -226,6 +288,15 @@ export function ThemePicker({ value, onChange, disabled }: ThemePickerProps) {
             {t("composer.openStudio")}
           </button>
         </div>
+      )}
+
+      {open && hover && (
+        <ThemeHoverPreview
+          tokens={hover.tokens}
+          name={hover.name}
+          dots={hover.dots}
+          anchor={hover.anchor}
+        />
       )}
 
       <ThemeStudio

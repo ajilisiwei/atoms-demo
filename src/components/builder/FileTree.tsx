@@ -73,7 +73,8 @@ function ancestorDirs(path: string | null | undefined): string[] {
 
 const SOURCE_EXTENSIONS = new Set(["ts", "tsx", "js", "jsx", "mjs", "cjs"]);
 
-function dotClass(name: string): string {
+// Shared with the editor tab bar so file-type dots match the tree.
+export function fileDotClass(name: string): string {
   const dot = name.lastIndexOf(".");
   const ext = dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
   if (SOURCE_EXTENSIONS.has(ext)) return "bg-accent";
@@ -229,7 +230,7 @@ function FileRow({
     >
       <span
         aria-hidden="true"
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass(node.name)}`}
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${fileDotClass(node.name)}`}
       />
       <span className="min-w-0 flex-1 truncate">{node.name}</span>
       {changed && (

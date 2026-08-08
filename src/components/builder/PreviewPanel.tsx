@@ -5,7 +5,7 @@ import type { VersionMeta } from "@/lib/client/api";
 import type { BundleDiagnostic } from "@/lib/bundler/bundle";
 import { useT } from "@/lib/i18n";
 import { CodeEditor } from "./CodeEditor";
-import { FileTree } from "./FileTree";
+import { FileTree, fileDotClass } from "./FileTree";
 import type { ProjectFiles } from "./types";
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
@@ -140,6 +140,28 @@ function PanelLeftIcon() {
   );
 }
 
+function useSaveLabel(editable: boolean, saveState: SaveState): string {
+  const t = useT();
+  if (!editable) return t("builder.editor.readOnly");
+  if (saveState === "saving") return t("builder.editor.saving");
+  if (saveState === "saved") return t("builder.editor.saved");
+  if (saveState === "error") return t("builder.editor.saveFailed");
+  return t("builder.editor.editable");
+}
+
+function SaveBadge({ editable, saveState }: { editable: boolean; saveState: SaveState }) {
+  const label = useSaveLabel(editable, saveState);
+  return (
+    <span
+      className={`shrink-0 px-3 text-[11px] ${
+        saveState === "error" && editable ? "text-red-400" : "text-muted"
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
 function EditorHeader({
   path,
   editable,
@@ -149,26 +171,91 @@ function EditorHeader({
   editable: boolean;
   saveState: SaveState;
 }) {
-  const t = useT();
-  const label = !editable
-    ? t("builder.editor.readOnly")
-    : saveState === "saving"
-      ? t("builder.editor.saving")
-      : saveState === "saved"
-        ? t("builder.editor.saved")
-        : saveState === "error"
-          ? t("builder.editor.saveFailed")
-          : t("builder.editor.editable");
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-1.5">
+    <div className="flex items-center justify-between gap-3 border-b border-line pl-3 py-1.5">
       <span className="min-w-0 truncate font-mono text-xs text-muted">{path ?? ""}</span>
-      <span
-        className={`shrink-0 text-[11px] ${
-          saveState === "error" && editable ? "text-red-400" : "text-muted"
-        }`}
+      <SaveBadge editable={editable} saveState={saveState} />
+    </div>
+  );
+}
+
+function TabBar({
+  tabs,
+  active,
+  editable,
+  saveState,
+  onSelect,
+  onClose,
+}: {
+  tabs: string[];
+  active: string | null;
+  editable: boolean;
+  saveState: SaveState;
+  onSelect: (path: string) => void;
+  onClose: (path: string) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="flex items-center border-b border-line">
+      <div
+        role="tablist"
+        className="flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto px-1.5 pt-1"
       >
-        {label}
-      </span>
+        {tabs.map((path) => {
+          const name = path.split("/").pop() ?? path;
+          const isActive = path === active;
+          return (
+            <div
+              key={path}
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={0}
+              title={path}
+              onClick={() => onSelect(path)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") onSelect(path);
+              }}
+              className={`group flex shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-t-lg border border-b-0 px-2.5 text-xs transition-colors ${
+                isActive
+                  ? "border-line bg-background text-foreground"
+                  : "border-transparent text-muted hover:bg-panel-2/60 hover:text-foreground"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${fileDotClass(name)}`}
+              />
+              <span className="max-w-[140px] truncate">{name}</span>
+              <button
+                type="button"
+                aria-label={t("builder.tabs.closeFile")}
+                title={t("builder.tabs.closeFile")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose(path);
+                }}
+                className={`grid h-4 w-4 shrink-0 place-items-center rounded hover:bg-panel-2 hover:text-foreground ${
+                  isActive ? "text-muted" : "text-transparent group-hover:text-muted"
+                }`}
+              >
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <SaveBadge editable={editable} saveState={saveState} />
     </div>
   );
 }
@@ -206,14 +293,56 @@ export function PreviewPanel({
   const isReact = template === "react-ts";
   const streaming = isReact ? filesStreaming : streamingCode !== null;
 
-  // Active file in the Code tab; mid-generation it follows the file being
-  // written, otherwise the user's pick (falling back to the entry file).
-  const [pickedFile, setPickedFile] = useState<string | null>(null);
-  const filePaths = files ? Object.keys(files) : [];
+  // ---- Editor tabs (multiple open files) --------------------------------
+  const [openTabs, setOpenTabs] = useState<string[]>([]);
+  const [activePath, setActivePath] = useState<string | null>(null);
+  const [tabsInited, setTabsInited] = useState(false);
+  const [lastWriting, setLastWriting] = useState<string | null>(null);
+
+  const entryPath = files
+    ? "src/main.tsx" in files
+      ? "src/main.tsx"
+      : Object.keys(files)[0] ?? null
+    : null;
+
+  // Render-phase adjustments (React's documented alternative to effects):
+  // open the entry file once content exists, and open/focus the file the
+  // agent is currently writing.
+  if (!tabsInited && entryPath) {
+    setTabsInited(true);
+    setOpenTabs([entryPath]);
+    setActivePath(entryPath);
+  }
+  if (writingPath !== lastWriting) {
+    setLastWriting(writingPath);
+    if (writingPath) {
+      if (!openTabs.includes(writingPath)) setOpenTabs([...openTabs, writingPath]);
+      setActivePath(writingPath);
+    }
+  }
+
+  // Tabs whose file vanished (deleted / older version) stay in state but are
+  // hidden until the file exists again.
+  const visibleTabs = files ? openTabs.filter((p) => p in files) : [];
   const activeFile =
     writingPath ??
-    (pickedFile && files && pickedFile in files ? pickedFile : null) ??
-    (files && "src/main.tsx" in files ? "src/main.tsx" : filePaths[0] ?? null);
+    (activePath && files && activePath in files ? activePath : null) ??
+    visibleTabs[0] ??
+    null;
+
+  function openFile(path: string) {
+    if (!openTabs.includes(path)) setOpenTabs([...openTabs, path]);
+    setActivePath(path);
+  }
+
+  function closeTab(path: string) {
+    const idx = openTabs.indexOf(path);
+    const next = openTabs.filter((p) => p !== path);
+    setOpenTabs(next);
+    if (activePath === path) {
+      setActivePath(next[Math.min(idx, next.length - 1)] ?? null);
+    }
+  }
 
   // File-name filter above the tree (the in-buffer search is Cmd/Ctrl-F).
   const [fileQuery, setFileQuery] = useState("");
@@ -547,7 +676,7 @@ export function PreviewPanel({
                     <FileTree
                       files={treeFiles}
                       activePath={activeFile}
-                      onSelect={setPickedFile}
+                      onSelect={openFile}
                       writingPath={writingPath}
                       changedPaths={changedPaths ?? undefined}
                     />
@@ -555,22 +684,29 @@ export function PreviewPanel({
                 </div>
               )}
               <div className="flex min-w-0 flex-1 flex-col">
-                <EditorHeader
-                  path={activeFile}
+                <TabBar
+                  tabs={visibleTabs}
+                  active={activeFile}
                   editable={editable}
                   saveState={saveState}
+                  onSelect={setActivePath}
+                  onClose={closeTab}
                 />
-                <div className="min-h-0 flex-1">
-                  <CodeEditor
-                    path={activeFile}
-                    value={(activeFile && files?.[activeFile]) || ""}
-                    readOnly={!editable}
-                    onChange={(v) => {
-                      if (activeFile) onFileEdit(activeFile, v);
-                    }}
-                    followTail={streaming && writingPath === activeFile}
-                  />
-                </div>
+                {activeFile ? (
+                  <div className="min-h-0 flex-1">
+                    <CodeEditor
+                      path={activeFile}
+                      value={files?.[activeFile] ?? ""}
+                      readOnly={!editable}
+                      onChange={(v) => onFileEdit(activeFile, v)}
+                      followTail={streaming && writingPath === activeFile}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted">
+                    {t("builder.files.codeEmpty")}
+                  </div>
+                )}
               </div>
             </div>
           ) : (

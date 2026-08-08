@@ -113,6 +113,7 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
   "builder.files.search": { en: "Search files…", zh: "搜索文件…" },
   "builder.files.collapsePanel": { en: "Collapse file panel", zh: "收起文件栏" },
   "builder.files.expandPanel": { en: "Expand file panel", zh: "展开文件栏" },
+  "builder.tabs.closeFile": { en: "Close file", zh: "关闭文件" },
   "builder.editor.editable": { en: "Editable — changes save automatically", zh: "可编辑 — 更改自动保存" },
   "builder.editor.readOnly": { en: "Read-only", zh: "只读" },
   "builder.editor.saving": { en: "Saving…", zh: "保存中…" },

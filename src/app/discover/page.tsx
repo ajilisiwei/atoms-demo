@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { listAgentsForUser } from "@/lib/agents-server";
 import { DiscoverClient } from "@/components/DiscoverClient";
 
 export const metadata = { title: "Discover — Atomlet" };
@@ -32,9 +33,12 @@ export default async function DiscoverPage() {
     }),
   ]);
 
+  const agents = await listAgentsForUser(user.id);
+
   return (
     <DiscoverClient
       userEmail={user.email}
+      agents={agents}
       sidebarProjects={myProjects}
       initialItems={projects.map((p) => ({
         id: p.id,

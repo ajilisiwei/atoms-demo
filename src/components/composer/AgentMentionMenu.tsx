@@ -1,11 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useT } from "@/lib/i18n";
-import type { BuiltinAgent } from "@/lib/agents";
+import { useLocale } from "@/lib/i18n";
+import { agentTagline, type AgentRecord } from "@/lib/agents";
 
 interface AgentMentionMenuProps {
-  candidates: BuiltinAgent[];
+  candidates: AgentRecord[];
   activeIndex: number;
   onSelect: (index: number) => void;
 }
@@ -16,7 +16,7 @@ export function AgentMentionMenu({
   activeIndex,
   onSelect,
 }: AgentMentionMenuProps) {
-  const t = useT();
+  const { locale } = useLocale();
 
   return (
     <div className="absolute bottom-full left-0 z-50 mb-2 w-80 overflow-hidden rounded-2xl border border-line bg-panel p-1.5 shadow-xl">
@@ -33,7 +33,7 @@ export function AgentMentionMenu({
         >
           <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-line">
             <Image
-              src={agent.avatar}
+              src={agent.avatarUrl}
               alt={agent.name}
               fill
               sizes="32px"
@@ -43,7 +43,7 @@ export function AgentMentionMenu({
           <span className="min-w-0">
             <span className="block text-sm font-medium">{agent.name}</span>
             <span className="block truncate text-xs text-muted">
-              {t(agent.taglineKey)}
+              {agentTagline(agent, locale)}
             </span>
           </span>
         </button>

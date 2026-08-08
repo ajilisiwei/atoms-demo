@@ -20,7 +20,42 @@ model User {
   oauthAccounts OAuthAccount[]
   creditLedger CreditLedger[]
   customThemes CustomTheme[]
+  agents       Agent[]
   createdAt    DateTime       @default(now())
+}
+
+// A buddy persona. The built-ins and user-created ones share this table so the
+// picker, the @-mention menu and Project.agentId all speak one id space:
+// built-ins are seeded with a stable slug id ("timo", "ledger", …) and no
+// owner, custom ones get a cuid and belong to their creator.
+model Agent {
+  // Built-ins are seeded with an explicit slug id, which wins over the default;
+  // custom buddies let the client generate one.
+  id             String   @id @default(cuid())
+  // "builtin" | "custom"
+  kind           String   @default("builtin")
+  // Picker section: "work" | "life" for built-ins, "custom" for user-created
+  group          String   @default("life")
+  // Null for built-ins; set for custom buddies
+  ownerId        String?
+  owner          User?    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name           String
+  tagline        String
+  taglineZh      String
+  // Appended to the build system prompt when this buddy drives a generation
+  persona        String   @db.Text
+  avatarUrl      String
+  // StarterPrompt[] (see src/lib/agent-types.ts); null when the buddy has none
+  starterPrompts Json?
+  // Built-in theme id suggested alongside this buddy (see src/lib/themes.ts)
+  themeHint      String?
+  sortOrder      Int      @default(0)
+  // Retires a built-in without deleting rows that projects still reference
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([ownerId])
 }
 
 model CreditLedger {

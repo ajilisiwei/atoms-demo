@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { api, ApiError } from "@/lib/client/api";
 import { useT } from "@/lib/i18n";
-import { getBuiltinAgent } from "@/lib/agents";
+import { findAgent } from "@/lib/agents";
+import type { AgentRecord } from "@/lib/agent-types";
 import { Logo } from "@/components/Logo";
 import { AppSidebar, type ProjectChange, type SidebarProject } from "@/components/shell/AppSidebar";
 import { MobileSidebar } from "@/components/shell/MobileSidebar";
@@ -25,6 +26,7 @@ export interface DiscoverItem {
 
 interface DiscoverClientProps {
   userEmail: string;
+  agents: AgentRecord[];
   sidebarProjects: SidebarProject[];
   initialItems: DiscoverItem[];
 }
@@ -139,6 +141,7 @@ function LivePreview({
 
 export function DiscoverClient({
   userEmail,
+  agents,
   sidebarProjects,
   initialItems,
 }: DiscoverClientProps) {
@@ -240,7 +243,7 @@ export function DiscoverClient({
           ) : (
             <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {items.map((item) => {
-                const agent = getBuiltinAgent(item.agentId);
+                const agent = findAgent(agents, item.agentId);
                 const busy = remixingId === item.id;
                 return (
                   <li
@@ -271,7 +274,7 @@ export function DiscoverClient({
                             title={agent.name}
                           >
                             <Image
-                              src={agent.avatar}
+                              src={agent.avatarUrl}
                               alt={agent.name}
                               fill
                               sizes="20px"

@@ -1,22 +1,29 @@
-// @-mention parsing for built-in agents. The selection is DERIVED from the
-// text: a mention whose word uniquely prefix-matches an agent name selects
-// that agent, and deleting the mention deselects it again.
+// @-mention parsing for buddies. The selection is DERIVED from the text: a
+// mention whose word uniquely prefix-matches a buddy name selects that buddy,
+// and deleting the mention deselects it again.
+//
+// The candidate list is passed in rather than imported: it is whatever the
+// caller loaded from GET /api/agents, so user-created buddies are mentionable
+// on exactly the same terms as the built-ins.
 
-import { BUILTIN_AGENTS, type BuiltinAgent } from "./agents";
+import type { AgentRecord } from "./agent-types";
 
 const MENTION_RE = /(^|\s)@(\S+)/g;
 
-export function filterAgents(query: string): BuiltinAgent[] {
+export function filterAgents(agents: AgentRecord[], query: string): AgentRecord[] {
   const q = query.toLowerCase();
-  return BUILTIN_AGENTS.filter((a) => a.name.toLowerCase().startsWith(q));
+  return agents.filter((a) => a.name.toLowerCase().startsWith(q));
 }
 
-// First mention in the text that uniquely prefix-matches an agent.
-export function resolveMentionAgent(text: string): BuiltinAgent | null {
+// First mention in the text that uniquely prefix-matches a buddy.
+export function resolveMentionAgent(
+  agents: AgentRecord[],
+  text: string
+): AgentRecord | null {
   MENTION_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = MENTION_RE.exec(text))) {
-    const hits = filterAgents(m[2]);
+    const hits = filterAgents(agents, m[2]);
     if (hits.length === 1) return hits[0];
   }
   return null;
@@ -39,11 +46,15 @@ export function activeMentionAt(
 
 // Removes the first mention resolving to `agent` and returns the cleaned
 // prompt (the mention is a selector, not part of the request).
-export function stripMention(text: string, agent: BuiltinAgent): string {
+export function stripMention(
+  agents: AgentRecord[],
+  text: string,
+  agent: AgentRecord
+): string {
   MENTION_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = MENTION_RE.exec(text))) {
-    const hits = filterAgents(m[2]);
+    const hits = filterAgents(agents, m[2]);
     if (hits.length === 1 && hits[0].id === agent.id) {
       const before = text.slice(0, m.index);
       const after = text.slice(m.index + m[0].length);

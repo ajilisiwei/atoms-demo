@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, streamGeneration, type VersionMeta } from "@/lib/client/api";
 import { AUTORUN_PREFIX } from "@/components/DashboardClient";
-import { getBuiltinAgent } from "@/lib/agents";
-import { useT } from "@/lib/i18n";
+import { agentTagline, findAgent, type AgentRecord } from "@/lib/agents";
+import { useLocale, useT } from "@/lib/i18n";
 import { LogoMark } from "@/components/Logo";
 import { assembleDocument } from "@/lib/bundler/assemble";
 import { bundleFiles, ensureEsbuild, type BundleDiagnostic } from "@/lib/bundler/bundle";
@@ -33,6 +33,7 @@ interface BuilderProps {
   // (e.g. the tab closed before the browser build finished).
   initialArtifactMissing?: boolean;
   initialCredits: number;
+  initialAgents: AgentRecord[];
 }
 
 export function Builder({
@@ -43,8 +44,10 @@ export function Builder({
   initialFiles,
   initialArtifactMissing,
   initialCredits,
+  initialAgents,
 }: BuilderProps) {
   const t = useT();
+  const { locale } = useLocale();
   const [project, setProject] = useState(initialProject);
   const [name, setName] = useState(initialProject.name);
   const [messages, setMessages] = useState(initialMessages);
@@ -503,7 +506,7 @@ export function Builder({
     }
   }
 
-  const activeAgent = getBuiltinAgent(agentId);
+  const activeAgent = findAgent(initialAgents, agentId);
   const latestVersion = versions[0] ?? null;
   const previewVersionId = viewing?.id ?? latestVersion?.id ?? null;
   const previewSrc = previewVersionId
@@ -701,10 +704,10 @@ export function Builder({
         {activeAgent ? (
           <span
             className="relative w-7 h-7 shrink-0 overflow-hidden rounded-full border border-line"
-            title={`${activeAgent.name} · ${t(activeAgent.taglineKey)}`}
+            title={`${activeAgent.name} · ${agentTagline(activeAgent, locale)}`}
           >
             <Image
-              src={activeAgent.avatar}
+              src={activeAgent.avatarUrl}
               alt={activeAgent.name}
               fill
               sizes="28px"
@@ -830,6 +833,7 @@ export function Builder({
           }
         >
           <ChatPanel
+            agents={initialAgents}
             messages={messages}
             generation={generation}
             error={error}
@@ -842,7 +846,7 @@ export function Builder({
             outOfCredits={credits <= 0}
             agent={
               activeAgent
-                ? { name: activeAgent.name, avatar: activeAgent.avatar }
+                ? { name: activeAgent.name, avatar: activeAgent.avatarUrl }
                 : null
             }
             agentValue={agentId}

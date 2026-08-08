@@ -6,6 +6,7 @@ import { ThemePicker } from "@/components/composer/ThemePicker";
 import { AgentMentionMenu } from "@/components/composer/AgentMentionMenu";
 import { useAgentMention } from "@/components/composer/useAgentMention";
 import { useT } from "@/lib/i18n";
+import type { AgentRecord } from "@/lib/agents";
 import type { GenerationState, UiMessage } from "./types";
 
 export interface RestoredInput {
@@ -29,9 +30,12 @@ interface ChatPanelProps {
   onThemeChange?: (id: string | null) => void;
   // Shows a persistent warning strip and disables sending
   outOfCredits?: boolean;
-  // Active built-in agent shown in the empty state
+  // Active buddy shown in the empty state
   agent?: { name: string; avatar: string } | null;
   // @-mention agent selection (optional; enabled when onAgentChange is given).
+  // `agents` is the mentionable list from GET /api/agents; without it the
+  // mention menu simply never opens.
+  agents?: AgentRecord[];
   agentValue?: string | null;
   onAgentChange?: (id: string | null) => void;
   // Files attached from the tree menu; chips render above the input.
@@ -72,6 +76,7 @@ export function ChatPanel({
   onThemeChange,
   outOfCredits,
   agent,
+  agents = [],
   agentValue,
   onAgentChange,
   attachedPaths,
@@ -86,6 +91,7 @@ export function ChatPanel({
   const mention = useAgentMention({
     text: input,
     setText: setInput,
+    agents,
     agentValue: agentValue ?? null,
     onAgentChange,
     textareaRef,

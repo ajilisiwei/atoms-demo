@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/client/api";
-import { useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 import { Logo } from "@/components/Logo";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AppSidebar, type ProjectChange } from "@/components/shell/AppSidebar";
@@ -13,6 +13,10 @@ import { SettingsDialog, type SettingsSection } from "@/components/shell/Setting
 import { PromptComposer } from "@/components/composer/PromptComposer";
 import { ProjectsGrid, type ProjectListItem } from "@/components/ProjectsGrid";
 import { AgentRow } from "@/components/AgentRow";
+import { BuddyEditorDialog } from "@/components/agents/BuddyEditorDialog";
+import { findAgent } from "@/lib/agents";
+import { extractSpecialty } from "@/lib/agent-validate";
+import type { AgentRecord } from "@/lib/agent-types";
 
 export const AUTORUN_PREFIX = "atomlet:autorun:";
 
@@ -22,6 +26,7 @@ interface DashboardClientProps {
   userEmail: string;
   displayName: string;
   credits: number;
+  initialAgents: AgentRecord[];
   initialProjects: ProjectListItem[];
 }
 
@@ -68,9 +73,11 @@ export function DashboardClient({
   userEmail,
   displayName,
   credits,
+  initialAgents,
   initialProjects,
 }: DashboardClientProps) {
   const t = useT();
+  const { locale } = useLocale();
   const router = useRouter();
   const [projects, setProjects] = useState(initialProjects);
   const [creating, setCreating] = useState(false);
@@ -80,6 +87,32 @@ export function DashboardClient({
   const [themeName, setThemeName] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [template, setTemplate] = useState("html");
+  const [agents, setAgents] = useState<AgentRecord[]>(initialAgents);
+  const [buddyEditor, setBuddyEditor] = useState<
+    { open: true; initial?: { id: string; name: string; specialty: string; avatarUrl: string } } | null
+  >(null);
+
+  // Picking a buddy adopts its theme hint unless the user chose a theme
+  // themselves; clearing/switching lets go of the previous hint.
+  function handleAgentChange(next: string | null) {
+    const prevHint = findAgent(agents, agentId)?.themeHint ?? null;
+    const nextHint = findAgent(agents, next)?.themeHint ?? null;
+    setAgentId(next);
+    setThemeName((current) => {
+      const followingHint = current === null || current === prevHint;
+      if (!followingHint) return current;
+      return nextHint ?? (current === prevHint ? null : current);
+    });
+  }
+
+  function handleBuddySaved(saved: AgentRecord) {
+    setAgents((prev) => {
+      const exists = prev.some((a) => a.id === saved.id);
+      return exists ? prev.map((a) => (a.id === saved.id ? saved : a)) : [...prev, saved];
+    });
+    setBuddyEditor(null);
+    handleAgentChange(saved.id);
+  }
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ProjectListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -210,7 +243,24 @@ export function DashboardClient({
 
         <section className="flex flex-col items-center px-4 sm:px-6 pt-8 sm:pt-16 pb-14 text-center">
           <div className="mb-6">
-            <AgentRow value={agentId} onChange={setAgentId} disabled={creating} />
+            <AgentRow
+              agents={agents}
+              value={agentId}
+              onChange={handleAgentChange}
+              disabled={creating}
+              onCreateBuddy={() => setBuddyEditor({ open: true })}
+              onEditBuddy={(a) =>
+                setBuddyEditor({
+                  open: true,
+                  initial: {
+                    id: a.id,
+                    name: a.name,
+                    specialty: extractSpecialty(a.persona) ?? "",
+                    avatarUrl: a.avatarUrl,
+                  },
+                })
+              }
+            />
           </div>
           <h1 className="font-display text-3xl sm:text-[44px] leading-tight tracking-tight">
             {t("dashboard.heroTitle", { name: displayName })}
@@ -221,14 +271,38 @@ export function DashboardClient({
               disabled={creating}
               themeValue={themeName}
               onThemeChange={setThemeName}
+              agents={agents}
               agentValue={agentId}
-              onAgentChange={setAgentId}
+              onAgentChange={handleAgentChange}
               templateValue={template}
               onTemplateChange={setTemplate}
               onSubmit={(p) => void createProject(p, themeName, agentId)}
               autoFocus
             />
           </div>
+          {!creating &&
+            (() => {
+              const sel = findAgent(agents, agentId);
+              if (!sel?.starterPrompts?.length) return null;
+              return (
+                <div className="mt-4 flex max-w-2xl flex-wrap items-center justify-center gap-2">
+                  <span className="text-xs text-muted">{t("agents.starterLabel")}</span>
+                  {sel.starterPrompts.map((sp, i) => {
+                    const text = locale === "zh" ? sp.zh : sp.en;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => void createProject(text, themeName, agentId)}
+                        className="rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-muted hover:border-accent-2/60 hover:text-foreground transition-colors"
+                      >
+                        {text}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           {creating && (
             <p className="mt-4 text-sm text-muted">{t("dashboard.creating")}</p>
           )}
@@ -292,6 +366,15 @@ export function DashboardClient({
           if (!deleting) setPendingDelete(null);
         }}
       />
+
+      {buddyEditor && (
+        <BuddyEditorDialog
+          open
+          initial={buddyEditor.initial}
+          onClose={() => setBuddyEditor(null)}
+          onSaved={handleBuddySaved}
+        />
+      )}
 
       <SettingsDialog
         open={settingsOpen}

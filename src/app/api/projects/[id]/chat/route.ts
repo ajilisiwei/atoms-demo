@@ -8,7 +8,8 @@ import { checkRateLimit } from "@/lib/ratelimit";
 import { getGenerationTheme } from "@/lib/themes";
 import { renderThemePrompt } from "@/lib/theme-prompt";
 import { parseCustomThemeName, toThemeDefinition } from "@/lib/custom-theme";
-import { getBuiltinAgent, agentPromptBlock, type BuiltinAgent } from "@/lib/agents";
+import { agentPromptBlock, type AgentRecord } from "@/lib/agents";
+import { loadAgentForUser } from "@/lib/agents-server";
 import {
   INITIAL_REACT_FILES,
   REACT_SYSTEM_PROMPT,
@@ -69,7 +70,7 @@ function buildReactMessages(params: {
   // Rendered by the caller so built-in and user-defined themes reach the model
   // through the same note (see resolveTheme).
   themeBlock?: string | null;
-  agent?: BuiltinAgent | null;
+  agent?: AgentRecord | null;
   focusPaths?: string[];
 }): OpenAI.ChatCompletionMessageParam[] {
   const { history, files, prompt, themeBlock, agent, focusPaths } = params;
@@ -197,8 +198,15 @@ export async function POST(req: NextRequest, { params }: Params) {
   ) {
     return NextResponse.json({ error: "Unknown theme" }, { status: 400 });
   }
+  // An agent id is a built-in slug or a custom buddy's cuid; both are resolved
+  // against what this user may build with, so an id naming someone else's buddy
+  // is as unknown as one that never existed.
   const requestedAgent = body.agentId;
-  if (typeof requestedAgent === "string" && requestedAgent !== "" && !getBuiltinAgent(requestedAgent)) {
+  const explicitAgent = typeof requestedAgent === "string" && requestedAgent !== "";
+  const requestedAgentRecord = explicitAgent
+    ? await loadAgentForUser(requestedAgent, userId)
+    : null;
+  if (explicitAgent && !requestedAgentRecord) {
     return NextResponse.json({ error: "Unknown agent" }, { status: 400 });
   }
 
@@ -234,9 +242,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   const effectiveThemeName = resolvedTheme.themeName;
   const themeBlock = resolvedTheme.themeBlock;
-  const effectiveAgentId =
+  const inheritedAgentId =
     requestedAgent === undefined ? project.agentId : requestedAgent || null;
-  const agent = getBuiltinAgent(effectiveAgentId);
+  const agent = requestedAgentRecord ?? (await loadAgentForUser(inheritedAgentId, userId));
+  // An inherited id that no longer resolves — a deleted buddy, or one carried
+  // over by a remix from another user — degrades to no agent and is cleared
+  // from the project below, the same self-heal resolveTheme does for themes.
+  const effectiveAgentId = agent?.id ?? null;
   const isReact = project.template === REACT_TEMPLATE;
   const previousFiles = isReact ? currentSnapshot(latestVersion?.files) : {};
   const messages = isReact

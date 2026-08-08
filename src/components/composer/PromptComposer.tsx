@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useT } from "@/lib/i18n";
+import type { AgentRecord } from "@/lib/agents";
 import { ThemePicker } from "./ThemePicker";
 import { AgentMentionMenu } from "./AgentMentionMenu";
 import { useAgentMention } from "./useAgentMention";
@@ -14,6 +15,9 @@ interface PromptComposerProps {
   onSubmit: (prompt: string) => void;
   autoFocus?: boolean;
   // @-mention agent selection (optional; enabled when onAgentChange is given).
+  // `agents` is the mentionable list from GET /api/agents; without it the
+  // mention menu simply never opens.
+  agents?: AgentRecord[];
   agentValue?: string | null;
   onAgentChange?: (id: string | null) => void;
   // App template toggle (optional; enabled when onTemplateChange is given).
@@ -36,6 +40,7 @@ export function PromptComposer({
   onThemeChange,
   onSubmit,
   autoFocus,
+  agents = [],
   agentValue,
   onAgentChange,
   templateValue,
@@ -49,6 +54,7 @@ export function PromptComposer({
   const mention = useAgentMention({
     text: input,
     setText: setInput,
+    agents,
     agentValue: agentValue ?? null,
     onAgentChange,
     textareaRef,

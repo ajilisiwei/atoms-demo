@@ -1,6 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        // Uploaded buddy avatars live in Vercel Blob; each store gets its own
+        // subdomain, so the pattern matches the store rather than one host.
+        protocol: "https",
+        hostname: "**.public.blob.vercel-storage.com",
+      },
+    ],
+  },
   async headers() {
     return [
       {

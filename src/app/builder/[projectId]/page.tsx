@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { listAgentsForUser } from "@/lib/agents-server";
 import { Builder } from "@/components/builder/Builder";
 
 export const metadata = { title: "Builder — Atomlet" };
@@ -48,6 +49,7 @@ export default async function BuilderPage({
   return (
     <Builder
       initialCredits={user.credits}
+      initialAgents={await listAgentsForUser(userId)}
       initialProject={{
         id: project.id,
         name: project.name,

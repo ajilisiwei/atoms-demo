@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { BuiltinAgent } from "@/lib/agents";
+import type { AgentRecord } from "@/lib/agents";
 import {
   activeMentionAt,
   filterAgents,
@@ -12,6 +12,9 @@ import {
 interface Options {
   text: string;
   setText: (t: string) => void;
+  // Mentionable buddies — built-ins plus the user's own, as loaded from
+  // GET /api/agents. Empty disables the menu without disabling the composer.
+  agents: AgentRecord[];
   agentValue: string | null;
   onAgentChange?: (id: string | null) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -19,7 +22,7 @@ interface Options {
 
 export interface AgentMention {
   menuOpen: boolean;
-  candidates: BuiltinAgent[];
+  candidates: AgentRecord[];
   activeIndex: number;
   select: (index: number) => void;
   handleChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -33,6 +36,7 @@ export interface AgentMention {
 export function useAgentMention({
   text,
   setText,
+  agents,
   agentValue,
   onAgentChange,
   textareaRef,
@@ -58,13 +62,13 @@ export function useAgentMention({
   }, [agentValue]);
 
   const active = activeMentionAt(text, caret);
-  const candidates = active ? filterAgents(active.query) : [];
+  const candidates = active ? filterAgents(agents, active.query) : [];
   const menuOpen =
     active !== null && candidates.length > 0 && dismissedAt !== active.start;
   const activeIndex = Math.min(activeIdx, Math.max(0, candidates.length - 1));
 
   function syncFromText(next: string) {
-    const resolved = resolveMentionAgent(next);
+    const resolved = resolveMentionAgent(agents, next);
     if (resolved && resolved.id !== agentValue) {
       if (!mentionDrivenRef.current) prevAgentRef.current = agentValue;
       mentionDrivenRef.current = true;
@@ -141,10 +145,10 @@ export function useAgentMention({
   }
 
   function prepareSubmit(): string {
-    const agent = resolveMentionAgent(text);
+    const agent = resolveMentionAgent(agents, text);
     // Freeze the flag so clearing the textarea after submit never deselects.
     mentionDrivenRef.current = false;
-    return agent ? stripMention(text, agent) : text.trim();
+    return agent ? stripMention(agents, text, agent) : text.trim();
   }
 
   return {

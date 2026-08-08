@@ -28,8 +28,8 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
 
   // Chat panel
   "builder.chat.empty": {
-    en: "Describe the app you want and the agent will plan it, write the code and render it live on the right.",
-    zh: "描述你想要的应用，智能体会为它规划、编写代码，并在右侧实时呈现。",
+    en: "Describe the app you want and your buddy will plan it, write the code and render it live on the right.",
+    zh: "描述你想要的应用，搭档会为它规划、编写代码，并在右侧实时呈现。",
   },
   "builder.chat.buildPlan": {
     en: "Build plan ({count} steps)",
@@ -50,8 +50,8 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
     zh: "积分已用完 — 生成已暂停",
   },
   "builder.chat.placeholder.first": {
-    en: "@ summons an agent — describe your app… (Enter to send)",
-    zh: "@ 一下召唤智能体，描述你的应用…（Enter 发送）",
+    en: "@ summons a buddy — describe your app… (Enter to send)",
+    zh: "@ 一下召唤搭档，描述你的应用…（Enter 发送）",
   },
   "builder.chat.placeholder.change": {
     en: "Describe a change… (Enter to send)",
@@ -77,8 +77,8 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
   "builder.timeline.slider": { en: "Version timeline", zh: "版本时间线" },
   "builder.timeline.initial": { en: "First build", zh: "初始版本" },
   "builder.preview.emptyStreaming": {
-    en: "The agent is writing code — preview appears when it finishes.",
-    zh: "智能体正在编写代码 — 完成后即可预览。",
+    en: "Your buddy is writing code — preview appears when it finishes.",
+    zh: "搭档正在编写代码 — 完成后即可预览。",
   },
   "builder.preview.emptyIdle": {
     en: "Nothing here yet. Send a prompt to generate your app.",

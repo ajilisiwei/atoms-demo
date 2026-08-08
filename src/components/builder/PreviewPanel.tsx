@@ -799,46 +799,43 @@ export function PreviewPanel({
           (isReact ? (
             <div className="flex h-full min-h-0 flex-col">
               <div className="flex min-h-0 flex-1">
-                {treeCollapsed ? (
-                  <div className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-line pt-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setTreeCollapsed(false)}
-                      title={t("builder.files.expandPanel")}
-                      aria-label={t("builder.files.expandPanel")}
-                      className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-panel-2 hover:text-foreground transition-colors"
-                    >
-                      <PanelLeftIcon />
-                    </button>
-                    <ConsoleButton
-                      open={consoleOpen}
-                      unseenError={consoleUnseenError}
-                      onToggle={onToggleConsole}
-                      title={t("builder.console.toggle")}
-                    />
-                  </div>
-                ) : (
+                {/* Activity bar (VSCode-style): editor-wide entries live here. */}
+                <div className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-line pt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setTreeCollapsed((v) => !v)}
+                    title={
+                      treeCollapsed
+                        ? t("builder.files.expandPanel")
+                        : t("builder.files.collapsePanel")
+                    }
+                    aria-label={
+                      treeCollapsed
+                        ? t("builder.files.expandPanel")
+                        : t("builder.files.collapsePanel")
+                    }
+                    className={`grid h-7 w-7 place-items-center rounded-md transition-colors ${
+                      treeCollapsed
+                        ? "text-muted hover:bg-panel-2 hover:text-foreground"
+                        : "bg-panel-2 text-foreground"
+                    }`}
+                  >
+                    <PanelLeftIcon />
+                  </button>
+                  <ConsoleButton
+                    open={consoleOpen}
+                    unseenError={consoleUnseenError}
+                    onToggle={onToggleConsole}
+                    title={t("builder.console.toggle")}
+                  />
+                </div>
+                {!treeCollapsed && (
                   <>
                     <div
                       style={{ width: treeResize.width }}
                       className="flex shrink-0 flex-col border-r border-line"
                     >
-                      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setTreeCollapsed(true)}
-                          title={t("builder.files.collapsePanel")}
-                          aria-label={t("builder.files.collapsePanel")}
-                          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-panel-2 hover:text-foreground transition-colors"
-                        >
-                          <PanelLeftIcon />
-                        </button>
-                        <ConsoleButton
-                          open={consoleOpen}
-                          unseenError={consoleUnseenError}
-                          onToggle={onToggleConsole}
-                          title={t("builder.console.toggle")}
-                        />
+                      <div className="flex h-10 shrink-0 items-center border-b border-line px-1.5">
                         <input
                           value={fileQuery}
                           onChange={(e) => setFileQuery(e.target.value)}
@@ -860,6 +857,7 @@ export function PreviewPanel({
                     </div>
                     <ResizeHandle
                       dragging={treeResize.dragging}
+                      stopDragging={treeResize.stopDragging}
                       {...treeResize.handleProps}
                     />
                   </>
@@ -896,26 +894,32 @@ export function PreviewPanel({
             </div>
           ) : (
             <div className="flex h-full min-h-0 flex-col">
-              <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-1.5">
-                <ConsoleButton
-                  open={consoleOpen}
-                  unseenError={consoleUnseenError}
-                  onToggle={onToggleConsole}
-                  title={t("builder.console.toggle")}
-                />
-                <span className="min-w-0 flex-1 truncate pl-1.5 font-mono text-xs text-muted">
-                  index.html
-                </span>
-                <SaveBadge editable={editable} saveState={saveState} />
-              </div>
-              <div className="min-h-0 flex-1">
-                <CodeEditor
-                  path="index.html"
-                  value={shownCode ?? ""}
-                  readOnly={!editable}
-                  onChange={onHtmlEdit}
-                  followTail={streaming}
-                />
+              <div className="flex min-h-0 flex-1">
+                <div className="flex w-10 shrink-0 flex-col items-center border-r border-line pt-1.5">
+                  <ConsoleButton
+                    open={consoleOpen}
+                    unseenError={consoleUnseenError}
+                    onToggle={onToggleConsole}
+                    title={t("builder.console.toggle")}
+                  />
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-1.5">
+                    <span className="min-w-0 flex-1 truncate pl-1.5 font-mono text-xs text-muted">
+                      index.html
+                    </span>
+                    <SaveBadge editable={editable} saveState={saveState} />
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    <CodeEditor
+                      path="index.html"
+                      value={shownCode ?? ""}
+                      readOnly={!editable}
+                      onChange={onHtmlEdit}
+                      followTail={streaming}
+                    />
+                  </div>
+                </div>
               </div>
               {consoleOpen && (
                 <ConsolePanel logs={consoleLogs} onClear={onClearConsole} />

@@ -856,6 +856,7 @@ export function Builder({
         {!chatCollapsed && (
           <ResizeHandle
             dragging={chatResize.dragging}
+            stopDragging={chatResize.stopDragging}
             className="hidden lg:block"
             {...chatResize.handleProps}
           />

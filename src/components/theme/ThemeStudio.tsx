@@ -125,19 +125,24 @@ function StudioThemeSelect({
         </svg>
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-[70] mt-1.5 max-h-80 w-64 overflow-y-auto overscroll-contain rounded-2xl border border-line bg-panel py-1 shadow-xl">
-          <p className="px-3.5 pb-1 pt-2 text-xs text-muted">
-            {t("theme.studio.builtinGroup")}
-          </p>
-          {BUILTIN_THEME_TOKENS.map((b) => row(b.id, b.name, b.tokens))}
-          {customs.length > 0 && (
-            <>
-              <p className="px-3.5 pb-1 pt-2 text-xs text-muted">
-                {t("theme.studio.customGroup")}
-              </p>
-              {customs.map((c) => row(`custom:${c.id}`, c.name, c.tokens))}
-            </>
-          )}
+        /* Solid rounded shell clips a separate scroll layer inside — putting
+           the radius on the scroller itself leaks the backdrop through the
+           corners once the top padding scrolls away. */
+        <div className="absolute left-0 top-full z-[70] mt-1.5 w-64 overflow-hidden rounded-2xl border border-line bg-panel shadow-xl">
+          <div className="max-h-80 overflow-y-auto overscroll-contain py-1">
+            <p className="px-3.5 pb-1 pt-2 text-xs text-muted">
+              {t("theme.studio.builtinGroup")}
+            </p>
+            {BUILTIN_THEME_TOKENS.map((b) => row(b.id, b.name, b.tokens))}
+            {customs.length > 0 && (
+              <>
+                <p className="px-3.5 pb-1 pt-2 text-xs text-muted">
+                  {t("theme.studio.customGroup")}
+                </p>
+                {customs.map((c) => row(`custom:${c.id}`, c.name, c.tokens))}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

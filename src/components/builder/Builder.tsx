@@ -15,6 +15,7 @@ import { ChatPanel, type RestoredInput } from "./ChatPanel";
 import type { ConsoleEntry, ConsoleLevel } from "./ConsolePanel";
 import { PreviewPanel, type PanelTab, type SaveState } from "./PreviewPanel";
 import { PublishDialog } from "./PublishDialog";
+import { ResizeHandle, useResizableWidth } from "./useResizable";
 import type { BuilderProject, GenerationState, ProjectFiles, UiMessage } from "./types";
 
 interface BuilderProps {
@@ -57,6 +58,8 @@ export function Builder({
   const [credits, setCredits] = useState(initialCredits);
   // Not persisted — resets to expanded on reload.
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  // Draggable chat pane width (desktop layout only).
+  const chatResize = useResizableWidth(420, 300, 640);
 
   // Multi-file (react-ts) state. `files` is the latest snapshot; viewing a
   // historical version swaps in `viewingFiles` without touching it.
@@ -727,10 +730,11 @@ export function Builder({
         {/* Kept mounted while collapsed (display:none) so ChatPanel state and
             an in-flight generation stream survive the toggle. */}
         <div
+          style={{ "--chat-w": `${chatResize.width}px` } as React.CSSProperties}
           className={
             chatCollapsed
               ? "hidden"
-              : "flex flex-col h-2/5 lg:h-auto lg:w-[420px] lg:shrink-0 border-b lg:border-b-0 lg:border-r border-line"
+              : "flex flex-col h-2/5 lg:h-auto lg:w-(--chat-w) lg:shrink-0 border-b lg:border-b-0 lg:border-r border-line"
           }
         >
           <ChatPanel
@@ -753,6 +757,13 @@ export function Builder({
             onAgentChange={setAgentId}
           />
         </div>
+        {!chatCollapsed && (
+          <ResizeHandle
+            dragging={chatResize.dragging}
+            className="hidden lg:block"
+            {...chatResize.handleProps}
+          />
+        )}
         <div className="flex-1 min-h-0">
           <PreviewPanel
             tab={tab}

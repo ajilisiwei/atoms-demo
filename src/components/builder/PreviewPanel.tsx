@@ -7,6 +7,7 @@ import { useT } from "@/lib/i18n";
 import { CodeEditor } from "./CodeEditor";
 import { ConsolePanel, type ConsoleEntry } from "./ConsolePanel";
 import { FileTree, fileDotClass } from "./FileTree";
+import { ResizeHandle, useResizableWidth } from "./useResizable";
 import type { ProjectFiles } from "./types";
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
@@ -128,6 +129,47 @@ const IFRAME_CLASS: Record<DeviceWidth, string> = {
   sm: "w-[390px] max-w-full h-full border-x border-line",
 };
 
+function ConsoleButton({
+  open,
+  unseenError,
+  onToggle,
+  title,
+}: {
+  open: boolean;
+  unseenError: boolean;
+  onToggle: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={title}
+      aria-label={title}
+      className={`relative grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors ${
+        open ? "bg-panel-2 text-foreground" : "text-muted hover:bg-panel-2 hover:text-foreground"
+      }`}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m5 8 4 4-4 4" />
+        <path d="M11 17h8" />
+      </svg>
+      {unseenError && (
+        <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />
+      )}
+    </button>
+  );
+}
+
 function PanelLeftIcon() {
   return (
     <svg
@@ -169,23 +211,6 @@ function SaveBadge({ editable, saveState }: { editable: boolean; saveState: Save
   );
 }
 
-function EditorHeader({
-  path,
-  editable,
-  saveState,
-}: {
-  path: string | null;
-  editable: boolean;
-  saveState: SaveState;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-line pl-3 py-1.5">
-      <span className="min-w-0 truncate font-mono text-xs text-muted">{path ?? ""}</span>
-      <SaveBadge editable={editable} saveState={saveState} />
-    </div>
-  );
-}
-
 function TabBar({
   tabs,
   active,
@@ -203,10 +228,10 @@ function TabBar({
 }) {
   const t = useT();
   return (
-    <div className="flex items-center border-b border-line">
+    <div className="flex h-10 shrink-0 items-center border-b border-line">
       <div
         role="tablist"
-        className="flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto px-1.5 pt-1"
+        className="flex h-full min-w-0 flex-1 items-end gap-0.5 overflow-x-auto px-1.5"
       >
         {tabs.map((path) => {
           const name = path.split("/").pop() ?? path;
@@ -222,7 +247,7 @@ function TabBar({
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") onSelect(path);
               }}
-              className={`group flex shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-t-lg border border-b-0 px-2.5 text-xs transition-colors ${
+              className={`group flex h-8 shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-t-lg border border-b-0 px-2.5 text-xs transition-colors ${
                 isActive
                   ? "border-line bg-background text-foreground"
                   : "border-transparent text-muted hover:bg-panel-2/60 hover:text-foreground"
@@ -359,6 +384,8 @@ export function PreviewPanel({
   // File-name filter above the tree (the in-buffer search is Cmd/Ctrl-F).
   const [fileQuery, setFileQuery] = useState("");
   const [treeCollapsed, setTreeCollapsed] = useState(false);
+  // Draggable divider between the tree and the editor.
+  const treeResize = useResizableWidth(224, 176, 480);
   const treeFiles = useMemo(() => {
     if (!files) return {};
     const q = fileQuery.trim().toLowerCase();
@@ -477,33 +504,6 @@ export function PreviewPanel({
                 </button>
               );
             })()}
-            <button
-              onClick={onToggleConsole}
-              title={t("builder.console.toggle")}
-              aria-label={t("builder.console.toggle")}
-              className={`relative w-7 h-7 rounded-md grid place-items-center transition-colors ${
-                consoleOpen
-                  ? "bg-panel-2 text-foreground"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="m5 8 4 4-4 4" />
-                <path d="M11 17h8" />
-              </svg>
-              {consoleUnseenError && (
-                <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />
-              )}
-            </button>
             <button
               onClick={() => setReloadNonce((n) => n + 1)}
               title={t("builder.preview.refresh")}
@@ -625,9 +625,6 @@ export function PreviewPanel({
                   className={`bg-white ${IFRAME_CLASS[deviceWidth]}`}
                 />
               </div>
-              {consoleOpen && (
-                <ConsolePanel logs={consoleLogs} onClear={onClearConsole} />
-              )}
               {showTimeline && displayVersion && (
                 <div className="flex items-center gap-3 border-t border-line bg-panel px-4 py-2.5">
                   <button
@@ -682,82 +679,115 @@ export function PreviewPanel({
 
         {tab === "code" &&
           (isReact ? (
-            <div className="flex h-full min-h-0">
-              {treeCollapsed ? (
-                <div className="flex w-10 shrink-0 flex-col items-center border-r border-line pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setTreeCollapsed(false)}
-                    title={t("builder.files.expandPanel")}
-                    aria-label={t("builder.files.expandPanel")}
-                    className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-panel-2 hover:text-foreground transition-colors"
-                  >
-                    <PanelLeftIcon />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex w-56 shrink-0 flex-col border-r border-line">
-                  <div className="flex items-center gap-1.5 border-b border-line p-2">
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="flex min-h-0 flex-1">
+                {treeCollapsed ? (
+                  <div className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-line pt-1.5">
                     <button
                       type="button"
-                      onClick={() => setTreeCollapsed(true)}
-                      title={t("builder.files.collapsePanel")}
-                      aria-label={t("builder.files.collapsePanel")}
-                      className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-panel-2 hover:text-foreground transition-colors"
+                      onClick={() => setTreeCollapsed(false)}
+                      title={t("builder.files.expandPanel")}
+                      aria-label={t("builder.files.expandPanel")}
+                      className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-panel-2 hover:text-foreground transition-colors"
                     >
                       <PanelLeftIcon />
                     </button>
-                    <input
-                      value={fileQuery}
-                      onChange={(e) => setFileQuery(e.target.value)}
-                      placeholder={t("builder.files.search")}
-                      className="w-full min-w-0 rounded-lg border border-line bg-panel px-2.5 py-1.5 text-xs outline-none placeholder:text-muted focus:border-accent-2/50 transition-colors"
-                    />
-                  </div>
-                  <div className="flex-1 overflow-y-auto py-2">
-                    <FileTree
-                      files={treeFiles}
-                      activePath={activeFile}
-                      onSelect={openFile}
-                      writingPath={writingPath}
-                      changedPaths={changedPaths ?? undefined}
-                    />
-                  </div>
-                </div>
-              )}
-              <div className="flex min-w-0 flex-1 flex-col">
-                <TabBar
-                  tabs={visibleTabs}
-                  active={activeFile}
-                  editable={editable}
-                  saveState={saveState}
-                  onSelect={setActivePath}
-                  onClose={closeTab}
-                />
-                {activeFile ? (
-                  <div className="min-h-0 flex-1">
-                    <CodeEditor
-                      path={activeFile}
-                      value={files?.[activeFile] ?? ""}
-                      readOnly={!editable}
-                      onChange={(v) => onFileEdit(activeFile, v)}
-                      followTail={streaming && writingPath === activeFile}
+                    <ConsoleButton
+                      open={consoleOpen}
+                      unseenError={consoleUnseenError}
+                      onToggle={onToggleConsole}
+                      title={t("builder.console.toggle")}
                     />
                   </div>
                 ) : (
-                  <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted">
-                    {t("builder.files.codeEmpty")}
-                  </div>
+                  <>
+                    <div
+                      style={{ width: treeResize.width }}
+                      className="flex shrink-0 flex-col border-r border-line"
+                    >
+                      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setTreeCollapsed(true)}
+                          title={t("builder.files.collapsePanel")}
+                          aria-label={t("builder.files.collapsePanel")}
+                          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-panel-2 hover:text-foreground transition-colors"
+                        >
+                          <PanelLeftIcon />
+                        </button>
+                        <ConsoleButton
+                          open={consoleOpen}
+                          unseenError={consoleUnseenError}
+                          onToggle={onToggleConsole}
+                          title={t("builder.console.toggle")}
+                        />
+                        <input
+                          value={fileQuery}
+                          onChange={(e) => setFileQuery(e.target.value)}
+                          placeholder={t("builder.files.search")}
+                          className="h-7 w-full min-w-0 rounded-lg border border-line bg-panel px-2.5 text-xs outline-none placeholder:text-muted focus:border-accent-2/50 transition-colors"
+                        />
+                      </div>
+                      <div className="flex-1 overflow-y-auto py-2">
+                        <FileTree
+                          files={treeFiles}
+                          activePath={activeFile}
+                          onSelect={openFile}
+                          writingPath={writingPath}
+                          changedPaths={changedPaths ?? undefined}
+                        />
+                      </div>
+                    </div>
+                    <ResizeHandle
+                      dragging={treeResize.dragging}
+                      {...treeResize.handleProps}
+                    />
+                  </>
                 )}
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <TabBar
+                    tabs={visibleTabs}
+                    active={activeFile}
+                    editable={editable}
+                    saveState={saveState}
+                    onSelect={setActivePath}
+                    onClose={closeTab}
+                  />
+                  {activeFile ? (
+                    <div className="min-h-0 flex-1">
+                      <CodeEditor
+                        path={activeFile}
+                        value={files?.[activeFile] ?? ""}
+                        readOnly={!editable}
+                        onChange={(v) => onFileEdit(activeFile, v)}
+                        followTail={streaming && writingPath === activeFile}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted">
+                      {t("builder.files.codeEmpty")}
+                    </div>
+                  )}
+                </div>
               </div>
+              {consoleOpen && (
+                <ConsolePanel logs={consoleLogs} onClear={onClearConsole} />
+              )}
             </div>
           ) : (
             <div className="flex h-full min-h-0 flex-col">
-              <EditorHeader
-                path="index.html"
-                editable={editable}
-                saveState={saveState}
-              />
+              <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-1.5">
+                <ConsoleButton
+                  open={consoleOpen}
+                  unseenError={consoleUnseenError}
+                  onToggle={onToggleConsole}
+                  title={t("builder.console.toggle")}
+                />
+                <span className="min-w-0 flex-1 truncate pl-1.5 font-mono text-xs text-muted">
+                  index.html
+                </span>
+                <SaveBadge editable={editable} saveState={saveState} />
+              </div>
               <div className="min-h-0 flex-1">
                 <CodeEditor
                   path="index.html"
@@ -767,6 +797,9 @@ export function PreviewPanel({
                   followTail={streaming}
                 />
               </div>
+              {consoleOpen && (
+                <ConsolePanel logs={consoleLogs} onClear={onClearConsole} />
+              )}
             </div>
           ))}
 

@@ -114,6 +114,18 @@ export const builderDict: Record<string, { en: string; zh: string }> = {
   "builder.files.collapsePanel": { en: "Collapse file panel", zh: "收起文件栏" },
   "builder.files.expandPanel": { en: "Expand file panel", zh: "展开文件栏" },
   "builder.tabs.closeFile": { en: "Close file", zh: "关闭文件" },
+
+  // Console panel
+  "builder.console.title": { en: "Console", zh: "控制台" },
+  "builder.console.toggle": { en: "Toggle console", zh: "打开/关闭控制台" },
+  "builder.console.all": { en: "{n} All", zh: "{n} 全部" },
+  "builder.console.errors": { en: "{n} Errors", zh: "{n} 错误" },
+  "builder.console.infos": { en: "{n} Info", zh: "{n} 信息" },
+  "builder.console.clear": { en: "Clear all", zh: "清除所有" },
+  "builder.console.empty": {
+    en: "No output yet — logs from your app and builds show up here.",
+    zh: "暂无输出 — 应用日志与构建信息会显示在这里。",
+  },
   "builder.editor.editable": { en: "Editable — changes save automatically", zh: "可编辑 — 更改自动保存" },
   "builder.editor.readOnly": { en: "Read-only", zh: "只读" },
   "builder.editor.saving": { en: "Saving…", zh: "保存中…" },

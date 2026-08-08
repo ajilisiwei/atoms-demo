@@ -12,6 +12,7 @@ import { assembleDocument } from "@/lib/bundler/assemble";
 import { bundleFiles, ensureEsbuild, type BundleDiagnostic } from "@/lib/bundler/bundle";
 import { downloadHtmlProject, downloadReactProject } from "@/lib/download";
 import { ChatPanel, type RestoredInput } from "./ChatPanel";
+import type { ConsoleEntry, ConsoleLevel } from "./ConsolePanel";
 import { PreviewPanel, type PanelTab, type SaveState } from "./PreviewPanel";
 import { PublishDialog } from "./PublishDialog";
 import type { BuilderProject, GenerationState, ProjectFiles, UiMessage } from "./types";
@@ -74,6 +75,43 @@ export function Builder({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<{ files?: ProjectFiles; html?: string } | null>(null);
 
+  // Console: runtime logs bridged from the preview + build events.
+  const [consoleLogs, setConsoleLogs] = useState<ConsoleEntry[]>([]);
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [consoleUnseenError, setConsoleUnseenError] = useState(false);
+  const consoleOpenRef = useRef(consoleOpen);
+  const logIdRef = useRef(0);
+
+  const pushLog = useCallback((level: ConsoleLevel, text: string) => {
+    setConsoleLogs((prev) => {
+      const next = [...prev, { id: ++logIdRef.current, level, text, at: Date.now() }];
+      return next.length > 500 ? next.slice(next.length - 500) : next;
+    });
+    if (level === "error" && !consoleOpenRef.current) setConsoleUnseenError(true);
+  }, []);
+
+  useEffect(() => {
+    consoleOpenRef.current = consoleOpen;
+  }, [consoleOpen]);
+
+  function toggleConsole() {
+    setConsoleOpen((v) => !v);
+    // Opening reveals the errors; closing means they were just seen.
+    setConsoleUnseenError(false);
+  }
+
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; level?: string; text?: string };
+      if (d?.type !== "atomlet:console" || typeof d.text !== "string") return;
+      const level: ConsoleLevel =
+        d.level === "error" ? "error" : d.level === "warn" ? "warn" : "info";
+      pushLog(level, d.text);
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [pushLog]);
+
   const htmlBufRef = useRef("");
   const filesBufRef = useRef<ProjectFiles>({});
   const generatingRef = useRef(false);
@@ -106,11 +144,18 @@ export function Builder({
     async (snapshot: ProjectFiles, versionId: string) => {
       setCompiling(true);
       setCompileErrors(null);
+      const t0 = performance.now();
       try {
         const result = await bundleFiles(snapshot);
         if (!mountedRef.current) return;
         if (!result.ok) {
           setCompileErrors(result.errors);
+          for (const d of result.errors) {
+            pushLog(
+              "error",
+              `${d.file ?? ""}${d.line !== undefined ? `:${d.line}` : ""} ${d.text}`.trim()
+            );
+          }
           setTab("code");
           return;
         }
@@ -119,6 +164,10 @@ export function Builder({
           css: result.css,
           title: project.name,
         });
+        pushLog(
+          "info",
+          `Build succeeded in ${Math.round(performance.now() - t0)}ms — js ${(result.js.length / 1024).toFixed(1)}KB, css ${(result.css.length / 1024).toFixed(1)}KB`
+        );
         await api(`/api/projects/${project.id}/versions/${versionId}`, {
           method: "PATCH",
           body: JSON.stringify({ compiledHtml: html }),
@@ -127,20 +176,16 @@ export function Builder({
         setTab("preview");
       } catch (err) {
         if (mountedRef.current) {
-          setCompileErrors([
-            {
-              text:
-                err instanceof ApiError
-                  ? err.message
-                  : t("builder.compile.storeFailed"),
-            },
-          ]);
+          const message =
+            err instanceof ApiError ? err.message : t("builder.compile.storeFailed");
+          pushLog("error", message);
+          setCompileErrors([{ text: message }]);
         }
       } finally {
         if (mountedRef.current) setCompiling(false);
       }
     },
-    [project.id, project.name, t]
+    [project.id, project.name, pushLog, t]
   );
 
   // Rebuild a missing artifact on open (e.g. the tab closed mid-build).
@@ -467,6 +512,7 @@ export function Builder({
       if (payload.files) {
         // Store sources even when the build fails, so edits are never lost;
         // the artifact only updates on a green build.
+        const t0 = performance.now();
         const result = await bundleFiles(payload.files);
         if (!mountedRef.current) return;
         const body: Record<string, unknown> = { files: payload.files };
@@ -476,6 +522,17 @@ export function Builder({
             css: result.css,
             title: project.name,
           });
+          pushLog(
+            "info",
+            `Build succeeded in ${Math.round(performance.now() - t0)}ms — js ${(result.js.length / 1024).toFixed(1)}KB, css ${(result.css.length / 1024).toFixed(1)}KB`
+          );
+        } else {
+          for (const d of result.errors) {
+            pushLog(
+              "error",
+              `${d.file ?? ""}${d.line !== undefined ? `:${d.line}` : ""} ${d.text}`.trim()
+            );
+          }
         }
         await api(`/api/projects/${project.id}/versions/${versionId}`, {
           method: "PATCH",
@@ -723,6 +780,11 @@ export function Builder({
             onFileEdit={handleFileEdit}
             onHtmlEdit={handleHtmlEdit}
             previewNonce={previewNonce}
+            consoleLogs={consoleLogs}
+            consoleOpen={consoleOpen}
+            consoleUnseenError={consoleUnseenError}
+            onToggleConsole={toggleConsole}
+            onClearConsole={() => setConsoleLogs([])}
           />
         </div>
       </div>

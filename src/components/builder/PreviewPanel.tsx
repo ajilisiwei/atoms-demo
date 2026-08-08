@@ -5,6 +5,7 @@ import type { VersionMeta } from "@/lib/client/api";
 import type { BundleDiagnostic } from "@/lib/bundler/bundle";
 import { useT } from "@/lib/i18n";
 import { CodeEditor } from "./CodeEditor";
+import { ConsolePanel, type ConsoleEntry } from "./ConsolePanel";
 import { FileTree, fileDotClass } from "./FileTree";
 import type { ProjectFiles } from "./types";
 
@@ -50,6 +51,12 @@ interface PreviewPanelProps {
   onHtmlEdit: (html: string) => void;
   // Bumped by the builder after a save lands, to reload the preview iframe.
   previewNonce: number;
+  // Console panel under the preview
+  consoleLogs: ConsoleEntry[];
+  consoleOpen: boolean;
+  consoleUnseenError: boolean;
+  onToggleConsole: () => void;
+  onClearConsole: () => void;
 }
 
 const TABS: { key: PanelTab; labelKey: string }[] = [
@@ -286,6 +293,11 @@ export function PreviewPanel({
   onFileEdit,
   onHtmlEdit,
   previewNonce,
+  consoleLogs,
+  consoleOpen,
+  consoleUnseenError,
+  onToggleConsole,
+  onClearConsole,
 }: PreviewPanelProps) {
   const t = useT();
   const [deviceWidth, setDeviceWidth] = useState<DeviceWidth>("full");
@@ -450,21 +462,48 @@ export function PreviewPanel({
         ))}
         {tab === "preview" && previewSrc && !streaming && (
           <div className="ml-auto flex items-center gap-1">
-            {DEVICE_OPTIONS.map((d) => (
-              <button
-                key={d.key}
-                onClick={() => setDeviceWidth(d.key)}
-                title={t(d.titleKey)}
-                aria-label={t(d.titleKey)}
-                className={`w-7 h-7 rounded-md grid place-items-center transition-colors ${
-                  deviceWidth === d.key
-                    ? "bg-panel-2 text-foreground"
-                    : "text-muted hover:text-foreground"
-                }`}
+            {(() => {
+              const idx = DEVICE_OPTIONS.findIndex((d) => d.key === deviceWidth);
+              const current = DEVICE_OPTIONS[idx] ?? DEVICE_OPTIONS[0];
+              const next = DEVICE_OPTIONS[(idx + 1) % DEVICE_OPTIONS.length];
+              return (
+                <button
+                  onClick={() => setDeviceWidth(next.key)}
+                  title={`${t(current.titleKey)} → ${t(next.titleKey)}`}
+                  aria-label={t(current.titleKey)}
+                  className="w-7 h-7 rounded-md grid place-items-center bg-panel-2 text-foreground transition-colors"
+                >
+                  {current.icon}
+                </button>
+              );
+            })()}
+            <button
+              onClick={onToggleConsole}
+              title={t("builder.console.toggle")}
+              aria-label={t("builder.console.toggle")}
+              className={`relative w-7 h-7 rounded-md grid place-items-center transition-colors ${
+                consoleOpen
+                  ? "bg-panel-2 text-foreground"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
               >
-                {d.icon}
-              </button>
-            ))}
+                <path d="m5 8 4 4-4 4" />
+                <path d="M11 17h8" />
+              </svg>
+              {consoleUnseenError && (
+                <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-500" />
+              )}
+            </button>
             <button
               onClick={() => setReloadNonce((n) => n + 1)}
               title={t("builder.preview.refresh")}
@@ -586,6 +625,9 @@ export function PreviewPanel({
                   className={`bg-white ${IFRAME_CLASS[deviceWidth]}`}
                 />
               </div>
+              {consoleOpen && (
+                <ConsolePanel logs={consoleLogs} onClear={onClearConsole} />
+              )}
               {showTimeline && displayVersion && (
                 <div className="flex items-center gap-3 border-t border-line bg-panel px-4 py-2.5">
                   <button

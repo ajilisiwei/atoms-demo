@@ -32,6 +32,118 @@ interface ThemeStudioProps {
 
 const clone = (t: ThemeTokens): ThemeTokens => JSON.parse(JSON.stringify(t)) as ThemeTokens;
 
+// App-styled theme dropdown for the studio header. Native <select> renders
+// the browser's own popup, which breaks the product's visual language — see
+// the "no native browser widgets" rule in CLAUDE.md.
+function StudioThemeSelect({
+  selectedId,
+  customs,
+  currentName,
+  onSelect,
+}: {
+  selectedId: string;
+  customs: CustomThemeRow[];
+  currentName: string;
+  onSelect: (id: string) => void;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const dots = (tokens: ThemeTokens): string[] => [
+    tokens.color.background,
+    tokens.color.foreground,
+    tokens.color.primary,
+    tokens.color.accent,
+  ];
+
+  const row = (id: string, name: string, tokens: ThemeTokens) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => {
+        onSelect(id);
+        setOpen(false);
+      }}
+      className="flex w-full items-center justify-between gap-3 px-3.5 py-2 text-left text-sm hover:bg-panel-2 transition-colors"
+    >
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="truncate">{name}</span>
+        {selectedId === id && <span className="text-accent-2">✓</span>}
+      </span>
+      <span className="flex shrink-0 items-center gap-1">
+        {dots(tokens).map((c, i) => (
+          <span
+            key={i}
+            className="h-2.5 w-2.5 rounded-full border border-line"
+            style={{ backgroundColor: c }}
+          />
+        ))}
+      </span>
+    </button>
+  );
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="flex h-8 max-w-[240px] items-center gap-1.5 rounded-lg border border-line bg-panel px-2.5 text-sm hover:border-accent-2/60 transition-colors"
+      >
+        <span className="truncate">{currentName}</span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0 text-muted"
+          aria-hidden="true"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-[70] mt-1.5 max-h-80 w-64 overflow-y-auto rounded-2xl border border-line bg-panel py-1 shadow-xl">
+          <p className="px-3.5 pb-1 pt-2 text-xs text-muted">
+            {t("theme.studio.builtinGroup")}
+          </p>
+          {BUILTIN_THEME_TOKENS.map((b) => row(b.id, b.name, b.tokens))}
+          {customs.length > 0 && (
+            <>
+              <p className="px-3.5 pb-1 pt-2 text-xs text-muted">
+                {t("theme.studio.customGroup")}
+              </p>
+              {customs.map((c) => row(`custom:${c.id}`, c.name, c.tokens))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ThemeStudio({ open, initialThemeId, onClose, onApply }: ThemeStudioProps) {
   const t = useT();
   const [customs, setCustoms] = useState<CustomThemeRow[]>([]);
@@ -166,28 +278,12 @@ export function ThemeStudio({ open, initialThemeId, onClose, onApply }: ThemeStu
       {/* Top bar */}
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line px-4">
         <p className="text-sm font-semibold">{t("theme.studio.title")}</p>
-        <select
-          value={selectedId}
-          onChange={(e) => selectTheme(e.target.value)}
-          className="h-8 max-w-[220px] rounded-lg border border-line bg-panel px-2 text-sm outline-none focus:border-accent-2/50"
-        >
-          <optgroup label={t("theme.studio.builtinGroup")}>
-            {BUILTIN_THEME_TOKENS.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </optgroup>
-          {customs.length > 0 && (
-            <optgroup label={t("theme.studio.customGroup")}>
-              {customs.map((c) => (
-                <option key={c.id} value={`custom:${c.id}`}>
-                  {c.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
+        <StudioThemeSelect
+          selectedId={selectedId}
+          customs={customs}
+          currentName={currentName}
+          onSelect={selectTheme}
+        />
         {dirty && (
           <span className="text-xs text-muted">{t("theme.studio.unsaved")}</span>
         )}
